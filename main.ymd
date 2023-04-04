@@ -8,14 +8,28 @@
 [#] Chrome only load font if it appear BOTH inside and outside the shadow dom
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css">
 
-[require](Katex.html)
+<script>
+window.wasm_ready = (async () => {
+const buffer = Uint8Array.from(atob("[wasm]"), c => c.charCodeAt(0))
+const x = await WebAssembly.instantiate(buffer, {})
+window.ca = x.instance.exports
+})()
+</script>
 
-[require](main.js)
+[wasm]= read("ca.wasm", 'base64')
+
+
+[require](Katex.html)
+[require](Num.html)
+
 
 
 <ca-katex>E = m\circ{}c^2_{\text{\tiny 汉字}} + \frac{x + y}{y}</ca-katex>
 
+[require](TestNum.html)
+<test-num></test-num>
 
+[require](main.js)
 
 
 [mixin] common.ymd
