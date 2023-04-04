@@ -1,0 +1,34 @@
+<!--
+    MathML is getting support in browsers, maybe we can try it instead.
+-->
+
+<template id="template-katex">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css">
+    <slot style="display: none;"></slot>
+    <div id="content"></div>
+</template>
+
+<script type="module">
+    import katex from 'https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.mjs'
+
+    customElements.define('ca-katex', class extends HTMLElement {
+        constructor() {
+            super()
+            const dom = document.getElementById('template-katex').content.cloneNode(true)
+            dom.querySelector('slot').addEventListener('slotchange', e => {
+                this.render_katex(e.target.assignedNodes()[0].textContent.trim())
+            })
+
+            this.attachShadow({mode: 'open'})
+            this.shadowRoot.appendChild(dom)
+        }
+
+        render_katex(code) {
+            katex.render(code, this.shadowRoot.querySelector("#content"), {
+                displayMode: this.hasAttribute('display'),
+                output: 'html'
+            })
+        }
+    })
+</script>
+
