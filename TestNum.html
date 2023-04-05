@@ -1,12 +1,16 @@
 <template id="template-test-num">
-    <ca-num></ca-num>
+    <ca-num type="plain"></ca-num>
+    <br>
     <button>x10</button>
     <button>/10</button>
     <button>+1</button>
     <button>^2</button>
+    <br>
     <button>a</button>
     <button>10</button>
     <button>e</button>
+    <button>d</button>
+    <button>ee</button>
 </template>
 
 <script type="module">
@@ -23,7 +27,8 @@
                 this.render()
             })
             dom.querySelectorAll('button')[2].addEventListener('click', e => {
-                this.exp = Math.log1p(Math.exp(this.exp))
+                if (this.exp < 100)
+                    this.exp = Math.log1p(Math.exp(this.exp))
                 this.render()
             })
             dom.querySelectorAll('button')[3].addEventListener('click', e => {
@@ -39,6 +44,12 @@
             })
             dom.querySelectorAll('button')[6].addEventListener('click', e => {
                 this.shadowRoot.querySelector('ca-num').setAttribute('format', 'e')
+            })
+            dom.querySelectorAll('button')[7].addEventListener('click', e => {
+                this.shadowRoot.querySelector('ca-num').setAttribute('format', 'd')
+            })
+            dom.querySelectorAll('button')[8].addEventListener('click', e => {
+                this.shadowRoot.querySelector('ca-num').setAttribute('format', 'ee')
             })
 
             this.attachShadow({mode: 'open'})
