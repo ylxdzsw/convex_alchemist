@@ -16,7 +16,7 @@ window.ca = x.instance.exports
 })()
 </script>
 
-[wasm]= read("ca.wasm", 'base64')
+[wasm]= read("target/wasm32-unknown-unknown/release/ca.wasm", 'base64')
 
 
 [require](Katex.html)

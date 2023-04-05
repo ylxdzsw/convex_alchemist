@@ -11,10 +11,25 @@ jobs:
       - name: Install Deno
         uses: denoland/setup-deno@v1
         with:
-          deno-version: v1.x
+          deno-version: "1.32.3"
 
-      - name: Build
+      - name: Install Rust      
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: nightly-2023-03-05
+          default: true
+          target: wasm32-unknown-unknown
+          components: rust-src
+
+      - name: Compile WASM
+        run: cargo build --release -Z build-std=std,panic_abort --target wasm32-unknown-unknown
+
+      - name: Build HTML
         run: deno run -A --unstable https://raw.githubusercontent.com/ylxdzsw/nattoppet/master/nattoppet.ts main.ymd > index.html
+
+      - name: Release Version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: cp index.html ${GITHUB_REF#refs/tags/}.html
 
       - name: Deploy
         uses: JamesIves/github-pages-deploy-action@v4.4.1
