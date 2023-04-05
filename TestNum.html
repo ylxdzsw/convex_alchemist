@@ -1,0 +1,56 @@
+<template id="template-test-num">
+    <ca-num></ca-num>
+    <button>x10</button>
+    <button>/10</button>
+    <button>+1</button>
+    <button>^2</button>
+    <button>a</button>
+    <button>10</button>
+    <button>e</button>
+</template>
+
+<script type="module">
+    customElements.define('test-num', class extends HTMLElement {
+        constructor() {
+            super()
+            const dom = document.getElementById('template-test-num').content.cloneNode(true)
+            dom.querySelectorAll('button')[0].addEventListener('click', e => {
+                this.exp = this.exp + Math.LN10
+                this.render()
+            })
+            dom.querySelectorAll('button')[1].addEventListener('click', e => {
+                this.exp = this.exp - Math.LN10
+                this.render()
+            })
+            dom.querySelectorAll('button')[2].addEventListener('click', e => {
+                this.exp = Math.log1p(Math.exp(this.exp))
+                this.render()
+            })
+            dom.querySelectorAll('button')[3].addEventListener('click', e => {
+                this.exp = this.exp * 2
+                this.render()
+            })
+            
+            dom.querySelectorAll('button')[4].addEventListener('click', e => {
+                this.shadowRoot.querySelector('ca-num').setAttribute('format', 'a')
+            })
+            dom.querySelectorAll('button')[5].addEventListener('click', e => {
+                this.shadowRoot.querySelector('ca-num').setAttribute('format', '10')
+            })
+            dom.querySelectorAll('button')[6].addEventListener('click', e => {
+                this.shadowRoot.querySelector('ca-num').setAttribute('format', 'e')
+            })
+
+            this.attachShadow({mode: 'open'})
+            this.shadowRoot.appendChild(dom)
+
+            this.exp = 0
+            this.render()
+        }
+
+        render() {
+            this.shadowRoot.querySelector('ca-num').textContent = this.exp
+        }
+    })
+</script>
+
