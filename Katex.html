@@ -4,8 +4,8 @@
 
 <template id="template-katex">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css">
+    <div></div>
     <slot style="display: none;"></slot>
-    <div id="content"></div>
 </template>
 
 <script type="module">
@@ -24,7 +24,7 @@
         }
 
         render_katex(code) {
-            katex.render(code, this.shadowRoot.querySelector("#content"), {
+            katex.render(code, this.shadowRoot.querySelector("div"), {
                 displayMode: this.hasAttribute('display'),
                 output: 'html'
             })

@@ -1,5 +1,4 @@
 <template id="template-num">
-    <ca-katex></ca-katex>
     <slot style="display: none;"></slot>
 </template>
 
@@ -8,18 +7,25 @@
         constructor() {
             super()
             const dom = document.getElementById('template-num').content.cloneNode(true)
-            dom.querySelector('slot').addEventListener('slotchange', e => {
-                this.render(e.target.assignedNodes()[0].textContent.trim())
-            })
+            dom.querySelector('slot').addEventListener('slotchange', e => this.render())
+            this.type = this.getAttribute('type') || 'html'
+            this.content = (() => {
+                switch (this.type) {
+                    case 'tex': return document.createElement('ca-katex')
+                    case 'html': return document.createElement('span')
+                    case 'plain': return document.createElement('span')
+                }
+            })()
+            dom.appendChild(this.content)
 
             this.attachShadow({mode: 'open'})
             this.shadowRoot.appendChild(dom)
         }
 
-        render(exp) {
+        render() {
             const format = this.getAttribute('format') || 'e'
-            const katex = exp_num_to_tex_str(parseFloat(exp), format)
-            this.shadowRoot.querySelector('ca-katex').textContent = katex
+            const exp = parseFloat(this.shadowRoot.querySelector('slot').assignedNodes()[0].textContent.trim())
+            this.content.innerHTML = exp_num_to_str(exp, format, this.type)
         }
 
         static get observedAttributes() {
@@ -27,7 +33,7 @@
         }
 
         attributeChangedCallback(name, oldValue, newValue) {
-            this.render(this.shadowRoot.querySelector('slot').assignedNodes()[0].textContent.trim())
+            this.render()
         }
     })
 </script>

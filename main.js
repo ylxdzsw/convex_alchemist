@@ -4,45 +4,70 @@ function check_browser_compatability() {
         `template element: ${'content' in document.createElement('template')}\n`
 }
 
-function exp_num_to_tex_str(exp, format) {
-    function keep_2_digits(num) {
-        return Math.floor(num * 100) / 100
-    }
+// display exp number as tex, html, or plaintext string (type == 'tex' | 'html' | 'plain')
+// different formats have different ranges. The checks should be done before calling this function 
+function exp_num_to_str(exp, format, type) {
+    const keep_n_digits = (num, n) => Math.floor(num * 10 ** n + 1e-9) / 10 ** n
 
-    function keep_3_digits(num) {
-        return Math.floor(num * 1000) / 1000
-    }
-
-    if (exp < Math.log(10000)) {
-        return keep_2_digits(Math.exp(exp))
-    }
-
-    if (exp >= 10000) {
-        return `e^{e^{${keep_3_digits(Math.log(exp))}}}`
-    }
+    if (exp == -Infinity)
+        return '0'
 
     switch (format) {
         case 'a': {
-            if (exp > Math.log(1000) * 26) {
-                return exp_num_to_tex_str(exp, '10')
-            }
+            if (exp < 0 || exp > Math.log(1000) * 27 - 1e-9)
+                throw new Error(`out of range: exp=${exp}, format=${format}`)
 
-            const scale = Math.floor(exp / Math.log(1000))
+            if (exp < Math.log(1000))
+                return keep_n_digits(Math.exp(exp), 2)
+
+            const scale = Math.floor(exp / Math.log(1000) + 1e-9)
             const significand = Math.exp(exp - scale * Math.log(1000))
-            return `${keep_2_digits(significand)}${String.fromCharCode('a'.charCodeAt(0) + scale)}`
+            const significand_str = significand < 10 ? keep_n_digits(significand, 3) :
+                                    significand < 100 ? keep_n_digits(significand, 2) :
+                                    keep_n_digits(significand, 1)
+            return `${significand_str}${String.fromCharCode('a'.charCodeAt(0) - 1 + scale)}`
         }
         case '10': {
-            const scale = Math.floor(exp / Math.LN10)
+            const scale = Math.floor(exp / Math.LN10 + 1e-9)
             const significand = Math.exp(exp - scale * Math.LN10)
-            return String.raw`${keep_2_digits(significand)}\times{}10^{${scale}}`
+            switch (type) {
+                case 'tex': return String.raw`${keep_n_digits(significand, 2)}\times{}10^{${scale}}`
+                case 'html': return `${keep_n_digits(significand, 2)}×10<sup>${scale}</sup>`
+                case 'plain': return `${keep_n_digits(significand, 2)}E${scale}`
+            }
         }
         case 'e': {
-            return String.raw`e^{${keep_3_digits(exp)}}`
+            switch (type) {
+                case 'tex': return String.raw`e^{${keep_n_digits(exp, 3)}}`
+                case 'html': return `e<sup>${keep_n_digits(exp, 3)}</sup>`
+                case 'plain': return `e${keep_n_digits(exp, 3)}`
+            }
         }
+        case 'd': {
+            if (exp >= Math.LN10 * 10 || exp < Math.log(0.001))
+                throw new Error(`out of range: exp=${exp}, format=${format}`)
+            return keep_n_digits(Math.exp(exp), exp > 0 ? 2 : 4)
+        }
+        case 'ee': {
+            if (exp < 1e-9)
+                throw new Error(`out of range: exp=${exp}, format=${format}`)
 
-        default:
+            switch (type) {
+                case 'tex': return `e^{e^{${keep_n_digits(Math.log(exp), 3)}}}`
+                case 'html': return `e<sup>e<sup>${keep_n_digits(Math.log(exp), 3)}</sup></sup>`
+                case 'plain': return `ee${keep_n_digits(Math.log(exp), 3)}`
+            }
+        }
+        default: {
             throw new Error(`Unknown format: ${format}`)
+        }
     }
+}
+
+function html_to_element(html) {
+    const container = document.createElement('template')
+    container.innerHTML = html.trim()
+    return container.content.firstChild
 }
 
 ;(async () => {

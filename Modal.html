@@ -1,0 +1,38 @@
+<template id="template-modal">
+    <div class="modal">
+        <div class="modal-content">
+            <slot style="display: none;"></slot>
+            <slot></slot>
+        </div>
+    </div>
+</template>
+
+<script type="module">
+    customElements.define('ca-num', class extends HTMLElement {
+        constructor() {
+            super()
+            const dom = document.getElementById('template-num').content.cloneNode(true)
+            dom.querySelector('slot').addEventListener('slotchange', e => {
+                this.render(e.target.assignedNodes()[0].textContent.trim())
+            })
+
+            this.attachShadow({mode: 'open'})
+            this.shadowRoot.appendChild(dom)
+        }
+
+        render(exp) {
+            const format = this.getAttribute('format') || 'e'
+            const katex = exp_num_to_tex_str(parseFloat(exp), format)
+            this.shadowRoot.querySelector('ca-katex').textContent = katex
+        }
+
+        static get observedAttributes() {
+            return ['format']
+        }
+
+        attributeChangedCallback(name, oldValue, newValue) {
+            this.render(this.shadowRoot.querySelector('slot').assignedNodes()[0].textContent.trim())
+        }
+    })
+</script>
+
