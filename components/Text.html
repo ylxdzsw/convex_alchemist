@@ -1,0 +1,35 @@
+<template id="template-text">
+    <span></span>
+</template>
+
+<script>
+    customElements.define('ca-text', class extends HTMLElement {
+        constructor() {
+            super()
+            this.attachShadow({mode: 'open'})
+            this.shadowRoot.appendChild(document.querySelector('#template-text').content.cloneNode(true))
+            customElements.upgrade(this)
+
+            this.render = this.render.bind(this)
+            game.on('config.lang', this.render)
+        }
+
+        set_content(lang_dict) {
+            for (const lang in lang_dict)
+                this.dataset[lang] = lang_dict[lang]
+            // remove those not in lang_dict?
+            this.render()
+        }
+
+        render(lang = game.config.lang) {
+            this.shadowRoot.querySelector('span').textContent = this.dataset[lang] || this.dataset.zh
+        }
+    })
+
+    function text(lang_dict) {
+        const el = document.createElement('ca-text')
+        el.set_content(lang_dict)
+        return el
+    }
+</script>
+

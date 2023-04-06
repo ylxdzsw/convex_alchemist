@@ -2,12 +2,19 @@
     <slot style="display: none;"></slot>
 </template>
 
-<script type="module">
+<script>
     customElements.define('ca-num', class extends HTMLElement {
         constructor() {
             super()
-            const dom = document.getElementById('template-num').content.cloneNode(true)
-            dom.querySelector('slot').addEventListener('slotchange', e => this.render())
+            this.attachShadow({mode: 'open'})
+            this.shadowRoot.appendChild(document.querySelector('#template-num').content.cloneNode(true))
+            customElements.upgrade(this)
+
+            this.shadowRoot.querySelector('slot').addEventListener('slotchange', e => this.render())
+        }
+
+        connectedCallback() {
+            if (this.content) return
             this.type = this.getAttribute('type') || 'html'
             this.content = (() => {
                 switch (this.type) {
@@ -16,13 +23,11 @@
                     case 'plain': return document.createElement('span')
                 }
             })()
-            dom.appendChild(this.content)
-
-            this.attachShadow({mode: 'open'})
-            this.shadowRoot.appendChild(dom)
+            this.shadowRoot.appendChild(this.content)
         }
 
         render() {
+            if (!this.content) return
             const format = this.getAttribute('format') || 'e'
             const exp = parseFloat(this.shadowRoot.querySelector('slot').assignedNodes()[0].textContent.trim())
             this.content.innerHTML = exp_num_to_str(exp, format, this.type)

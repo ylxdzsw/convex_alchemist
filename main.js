@@ -70,6 +70,64 @@ function html_to_element(html) {
     return container.content.firstChild
 }
 
+// the event is structued as a tree with dot in names
+// so emit("a.b.c", ...) will emit "a", "a.b", "a.b.c"
+class EventBus {
+    constructor() {
+        this.events = Object.create(null)
+    }
+
+    on(event, callback) {
+        this.events[event] ??= [] // WeakSet is not iterable
+        this.events[event].push(new WeakRef(callback))
+    }
+
+    emit(event, ...args) {
+        const events = event.split('.')
+        for (let i = 0; i < events.length; i++) {
+            this.emit_exact(events.slice(0, i + 1).join('.'), ...args)
+        }
+    }
+
+    emit_exact(event, ...args) {
+        const callbacks = this.events[event] ?? []
+
+        for (let i = 0; i < callbacks.length; i++) {
+            const callback = callbacks[i].deref()
+            if (callback) {
+                callback(...args)
+            } else {
+                callbacks[i] = callbacks[callbacks.length - 1]
+                callbacks.pop()
+                i--
+            }
+        }
+    }
+}
+
+const game = {
+    event_bus: new EventBus(),
+
+    config: {
+        _lang: 'zh',
+        get lang() { return this._lang },
+        set lang(value) {
+            this._lang = value
+            game.emit('config.lang', value)
+        }
+
+    },
+
+    on(...args) {
+        this.event_bus.on(...args)
+    },
+
+    emit(...args) {
+        this.event_bus.emit(...args)
+    },
+}
+
+
 ;(async () => {
     const browser_compatability = check_browser_compatability()
     console.log(browser_compatability)

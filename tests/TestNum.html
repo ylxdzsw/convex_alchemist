@@ -1,5 +1,5 @@
 <template id="template-test-num">
-    <ca-num type="plain"></ca-num>
+    <ca-num type="tex"></ca-num>
     <br>
     <button>x10</button>
     <button>/10</button>
@@ -17,43 +17,43 @@
     customElements.define('test-num', class extends HTMLElement {
         constructor() {
             super()
-            const dom = document.getElementById('template-test-num').content.cloneNode(true)
-            dom.querySelectorAll('button')[0].addEventListener('click', e => {
+            this.attachShadow({mode: 'open'})
+            this.shadowRoot.appendChild(document.querySelector('#template-test-num').content.cloneNode(true))
+            customElements.upgrade(this)
+
+            this.shadowRoot.querySelectorAll('button')[0].addEventListener('click', e => {
                 this.exp = this.exp + Math.LN10
                 this.render()
             })
-            dom.querySelectorAll('button')[1].addEventListener('click', e => {
+            this.shadowRoot.querySelectorAll('button')[1].addEventListener('click', e => {
                 this.exp = this.exp - Math.LN10
                 this.render()
             })
-            dom.querySelectorAll('button')[2].addEventListener('click', e => {
+            this.shadowRoot.querySelectorAll('button')[2].addEventListener('click', e => {
                 if (this.exp < 100)
                     this.exp = Math.log1p(Math.exp(this.exp))
                 this.render()
             })
-            dom.querySelectorAll('button')[3].addEventListener('click', e => {
+            this.shadowRoot.querySelectorAll('button')[3].addEventListener('click', e => {
                 this.exp = this.exp * 2
                 this.render()
             })
             
-            dom.querySelectorAll('button')[4].addEventListener('click', e => {
+            this.shadowRoot.querySelectorAll('button')[4].addEventListener('click', e => {
                 this.shadowRoot.querySelector('ca-num').setAttribute('format', 'a')
             })
-            dom.querySelectorAll('button')[5].addEventListener('click', e => {
+            this.shadowRoot.querySelectorAll('button')[5].addEventListener('click', e => {
                 this.shadowRoot.querySelector('ca-num').setAttribute('format', '10')
             })
-            dom.querySelectorAll('button')[6].addEventListener('click', e => {
+            this.shadowRoot.querySelectorAll('button')[6].addEventListener('click', e => {
                 this.shadowRoot.querySelector('ca-num').setAttribute('format', 'e')
             })
-            dom.querySelectorAll('button')[7].addEventListener('click', e => {
+            this.shadowRoot.querySelectorAll('button')[7].addEventListener('click', e => {
                 this.shadowRoot.querySelector('ca-num').setAttribute('format', 'd')
             })
-            dom.querySelectorAll('button')[8].addEventListener('click', e => {
+            this.shadowRoot.querySelectorAll('button')[8].addEventListener('click', e => {
                 this.shadowRoot.querySelector('ca-num').setAttribute('format', 'ee')
             })
-
-            this.attachShadow({mode: 'open'})
-            this.shadowRoot.appendChild(dom)
 
             this.exp = 0
             this.render()
