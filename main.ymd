@@ -16,11 +16,10 @@ window.ca = x.instance.exports
 [wasm]= read("target/wasm32-unknown-unknown/release/ca.wasm", 'base64')
 
 [#] Chrome only load font if it appear BOTH inside and outside the shadow dom
-[#] Also, keep the two as the first two style elements cause we are cloning them in shadow
+[#] Also, keep it as the first style element because we are cloning it to use in shadow
 [require](lib/katex.css)
-[require](main.less)
-
 [require](lib/katex.js)
+[require](main.less)
 [require](main.js)
 
 [require](components/Card.html)

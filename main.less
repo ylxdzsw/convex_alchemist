@@ -12,13 +12,7 @@ html {
 }
 
 body {
-    max-width: 625px;
     margin: 0 auto;
-    padding: 1rem 1rem;
-
-    @media (max-width: 425px) {
-        padding: 0 .8rem;
-    }
 }
 
 h3 {
@@ -57,7 +51,7 @@ button {
     border-radius: .375rem;
     cursor: pointer;
     line-height: 100%;
-    padding: 0.6rem 0.8rem;
+    padding: 0.5rem 0.6rem;
 
     &:active {
         border-color: #4a4a4a;
@@ -76,19 +70,6 @@ button {
     &:focus:not(:active) {
         box-shadow: rgba(72, 95, 199, .25) 0 0 0 .125rem;
     }
-}
-
-
-pre {
-    clear: both;
-    margin-top: 1rem;
-    font-family: monospace;
-    color: #222;
-    border: 1px solid #bcd;
-    background-color: #ebf1f5;
-    padding: .8rem;
-    overflow-x: auto;
-    font-size: .8rem;
 }
 
 .hidden {
