@@ -5,17 +5,19 @@
             display: block;
             min-width: 375px;
             max-width: 625px;
-            padding: 1rem 1rem;
+            margin: 1rem;
+        }
+        h3 {
+            margin: 0 0 1rem;
+            border-bottom: #bbb 1px solid;
         }
         @media (max-width: 425px) {
             :host {
-                padding: 0 .8rem;
+                margin: .8rem;
             }
-        }
-        h3 {
-            margin: 2rem 0 1rem;
-            position: relative;
-            border-bottom: #bbb 1px solid;
+            h3 {
+                margin-bottom: .8rem;
+            }
         }
     </style>
     <h3><ca-text></ca-text></h3>

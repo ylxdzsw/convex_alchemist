@@ -21,12 +21,16 @@
             this.render()
         }
 
+        connectedCallback() {
+            this.render()
+        }
+
         render(lang = game.config.lang) {
             this.shadowRoot.querySelector('span').textContent = this.dataset[lang] || this.dataset.zh
         }
     })
 
-    function text(lang_dict) {
+    function ca_text(lang_dict) {
         const el = document.createElement('ca-text')
         el.set_content(lang_dict)
         return el

@@ -117,6 +117,12 @@ const number_format_cut_offs = [ // in exp
 const game = {
     event_bus: new EventBus(),
 
+    ptr: null,
+
+    state: {
+        day: 0,
+    },
+
     config: (() => {
         const init = {
             'lang': 'zh',
@@ -139,12 +145,16 @@ const game = {
     })(),
 
     on(...args) {
-        this.event_bus.on(...args)
+        game.event_bus.on(...args)
     },
 
     emit(...args) {
-        this.event_bus.emit(...args)
+        game.event_bus.emit(...args)
     },
+
+    log(lang_dict) {
+        game.emit('log', lang_dict)
+    }
 }
 
 

@@ -24,7 +24,7 @@ body {
     min-width: 375px;
     max-width: calc(625px * 2);
     margin: 0 auto;
-    padding: 0 2rem;
+    padding: 1rem 2rem 0;
 
     &::after {
         content: "";
@@ -44,57 +44,6 @@ body {
 
     @media (max-width: calc(400px * 2 + 4rem)) {
         width: 100%;
-    }
-}
-
-label {
-    display: block;
-    font-weight: 500;
-    font-size: 0.9rem;
-
-    input:not([type]), input[type="text"], input[type="number"] {
-        display: block;
-        width: 100%;
-        margin: 0.1rem 0 1rem;
-        padding: 0.4rem;
-        border: 1px solid #bbb;
-        border-radius: 3px;
-        font-size: 0.9rem;
-        box-sizing: border-box;
-    }
-
-    input[type="checkbox"] {
-        margin: 0.1rem 0.5rem 1rem 0;
-        transform: translateY(0.1rem);
-    }
-}
-
-button {
-    display: inline-block;
-    appearance: none;
-    background-color: transparent;
-    border: 1px solid #bbb;
-    border-radius: .375rem;
-    cursor: pointer;
-    line-height: 100%;
-    padding: 0.5rem 0.6rem;
-
-    &:active {
-        border-color: #4a4a4a;
-        outline: 0;
-    }
-
-    &:focus {
-        border-color: #485fc7;
-        outline: 0;
-    }
-
-    &:hover {
-        border-color: #b5b5b5;
-    }
-
-    &:focus:not(:active) {
-        box-shadow: rgba(72, 95, 199, .25) 0 0 0 .125rem;
     }
 }
 
