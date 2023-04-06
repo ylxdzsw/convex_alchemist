@@ -1,0 +1,44 @@
+<ca-card
+    id="log-card"
+    data-title-zh="日志"
+    data-title-en="Log"
+>
+<pre id="log">
+
+</pre>
+</ca-card>
+
+<style>
+    #log {
+        font-family: monospace;
+        color: #222;
+        border: 1px solid #bcd;
+        background-color: #ebf1f5;
+        padding: .5rem .8rem;
+        margin: 0;
+        overflow: auto;
+        font-size: .8rem;
+        height: 16rem;
+    }
+</style>
+
+<script type="module">
+    const log = document.querySelector('#log')
+
+    log.textContent = '' // remove the empty line
+
+    log.log = lang_dict => {
+        let str;
+        switch (game.config.lang) {
+            case 'zh': str = `第${game.state.day}天：`; break
+            case 'en': str = `Day ${game.state.day}: `; break
+        }
+
+        str += lang_dict[game.config.lang] ?? lang_dict['zh']
+        console.log(str)
+        log.textContent += str + '\n'
+        log.scrollTop = log.scrollHeight
+    }
+
+    game.on('log', log.log)
+</script>

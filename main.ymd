@@ -1,6 +1,7 @@
 <!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-<meta name="author" content="ylxdzsw@gmail.com">
+<meta name="author" content="ca@ylxdzsw.com">
+<meta name="github" content="https://github.com/ylxdzsw/convex_alchemist">
 <meta charset="utf-8">
 
 <title>Convex Alchemist</title>
@@ -15,7 +16,7 @@ window.ca = x.instance.exports
 
 [wasm]= read("target/wasm32-unknown-unknown/release/ca.wasm", 'base64')
 
-[#] Chrome only load font if it appear BOTH inside and outside the shadow dom
+[#] Chrome only load font if it appear BOTH inside and outside the shadow dom, even when inlined as data url
 [#] Also, keep it as the first style element because we are cloning it to use in shadow
 [require](lib/katex.css)
 [require](lib/katex.js)
@@ -31,32 +32,15 @@ window.ca = x.instance.exports
 
 <div class="column">
 
-
-
-<ca-card data-title-zh="zh title" data-title-en="en title">
-<test-num></test-num>
-
-</ca-card>
-
-
-<ca-card data-title-zh="zh title" data-title-en="en title">
-<button>The Button</button>
-</ca-card>
-
-
-<ca-card data-title-zh="zh title" data-title-en="en title">
-<button>The Button</button>
-</ca-card>
-
+[require](status.html)
+[require](inventory.html)
+[require](buildings.html)
 
 </div> <div class="column">
 
-<ca-card data-title-zh="zh title" data-title-en="en title">
-<button>The Button</button>
-</ca-card>
-
+[require](log.html)
+[require](settings.html)
 
 </div>
-
 
 [mixin] common.ymd
