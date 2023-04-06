@@ -10,7 +10,9 @@
             this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
             customElements.upgrade(this)
 
-            this.shadowRoot.querySelector('slot').addEventListener('slotchange', e => this.render())
+            this.render = this.render.bind(this)
+            this.shadowRoot.querySelector('slot').addEventListener('slotchange', this.render)
+            game.on('config.number_format', this.render)
         }
 
         connectedCallback() {
@@ -28,17 +30,13 @@
 
         render() {
             if (!this.content) return
-            const format = this.getAttribute('format') || 'e'
             const exp = parseFloat(this.shadowRoot.querySelector('slot').assignedNodes()[0].textContent.trim())
+            const format = (() => {
+                for (const [i, cut_off] of number_format_cut_offs.entries()) if (exp < cut_off)
+                    return game.config.number_format[i]
+                return game.config.number_format[number_format_cut_offs.length]
+            })()
             this.content.innerHTML = exp_num_to_str(exp, format, this.type)
-        }
-
-        static get observedAttributes() {
-            return ['format']
-        }
-
-        attributeChangedCallback(name, oldValue, newValue) {
-            this.render()
         }
     })
 </script>

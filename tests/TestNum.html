@@ -40,19 +40,19 @@
             })
             
             this.shadowRoot.querySelectorAll('button')[4].addEventListener('click', e => {
-                this.shadowRoot.querySelector('ca-num').setAttribute('format', 'a')
+                game.config.number_format = game.config.number_format.fill('a')
             })
             this.shadowRoot.querySelectorAll('button')[5].addEventListener('click', e => {
-                this.shadowRoot.querySelector('ca-num').setAttribute('format', '10')
+                game.config.number_format = game.config.number_format.fill('10')
             })
             this.shadowRoot.querySelectorAll('button')[6].addEventListener('click', e => {
-                this.shadowRoot.querySelector('ca-num').setAttribute('format', 'e')
+                game.config.number_format = game.config.number_format.fill('e')
             })
             this.shadowRoot.querySelectorAll('button')[7].addEventListener('click', e => {
-                this.shadowRoot.querySelector('ca-num').setAttribute('format', 'd')
+                game.config.number_format = game.config.number_format.fill('d')
             })
             this.shadowRoot.querySelectorAll('button')[8].addEventListener('click', e => {
-                this.shadowRoot.querySelector('ca-num').setAttribute('format', 'ee')
+                game.config.number_format = game.config.number_format.fill('ee')
             })
 
             this.exp = 0
