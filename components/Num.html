@@ -6,8 +6,8 @@
     customElements.define('ca-num', class extends HTMLElement {
         constructor() {
             super()
-            this.attachShadow({mode: 'open'})
-            this.shadowRoot.appendChild(document.querySelector('#template-num').content.cloneNode(true))
+            const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
+            this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
             customElements.upgrade(this)
 
             this.shadowRoot.querySelector('slot').addEventListener('slotchange', e => this.render())
