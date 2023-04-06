@@ -77,9 +77,10 @@ class EventBus {
         this.events = Object.create(null)
     }
 
-    on(event, callback) {
+    on(event, callback, invoke_immediately = false) {
         this.events[event] ??= [] // WeakSet is not iterable
         this.events[event].push(new WeakRef(callback))
+        if (invoke_immediately) callback()
     }
 
     emit(event, ...args) {
@@ -105,18 +106,37 @@ class EventBus {
     }
 }
 
+const number_format_cut_offs = [ // in exp
+    Math.log(0.001),
+    0,
+    Math.log(10000),
+    27 * Math.LN10,
+    10000
+]
+
 const game = {
     event_bus: new EventBus(),
 
-    config: {
-        _lang: 'zh',
-        get lang() { return this._lang },
-        set lang(value) {
-            this._lang = value
-            game.emit('config.lang', value)
+    config: (() => {
+        const init = {
+            'lang': 'zh',
+            'number_format': ['e', 'd', 'd', 'e', 'e', 'ee'],
         }
 
-    },
+        const config = Object.create(null)
+        for (const [name, value] of Object.entries(init)) {
+            config['_'+name] = value
+            Object.defineProperty(config, name, {
+                get() { return this['_'+name] },
+                set(value) {
+                    this['_'+name] = value
+                    game.emit('config.'+name, value)
+                }
+            })
+        }
+
+        return config
+    })(),
 
     on(...args) {
         this.event_bus.on(...args)

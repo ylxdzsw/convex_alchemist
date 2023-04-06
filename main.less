@@ -11,14 +11,40 @@ html {
     }
 }
 
+/*
+    responsive:
+        a card is 375px - 625px wide, including its internal padding
+        when the screen < 425px, use a smaller font
+        when the screen < 800px + 4rem, use one column
+        otherwise, use two columns and additional padding on the page
+        when using two columns, the cards are at least 400px (375px minimal is used only with small font)
+*/
+
 body {
+    min-width: 375px;
+    max-width: calc(625px * 2);
     margin: 0 auto;
+    padding: 0 2rem;
+
+    &::after {
+        content: "";
+        clear: both;
+        display: table;
+    }
+
+    @media (max-width: calc(400px * 2 + 4rem)) {
+        max-width: 625px;
+        padding: 0 0;
+    }
 }
 
-h3 {
-    margin: 2rem 0 1rem;
-    position: relative;
-    border-bottom: #bbb 1px solid;
+.column {
+    float: left;
+    width: 50%;
+
+    @media (max-width: calc(400px * 2 + 4rem)) {
+        width: 100%;
+    }
 }
 
 label {

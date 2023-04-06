@@ -1,5 +1,5 @@
 <!doctype html>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
 <meta name="author" content="ylxdzsw@gmail.com">
 <meta charset="utf-8">
 
@@ -28,17 +28,35 @@ window.ca = x.instance.exports
 [require](components/Text.html)
 
 [require](tests/TestNum.html)
+
+<div class="column">
+
+
+
+<ca-card data-title-zh="zh title" data-title-en="en title">
 <test-num></test-num>
+
+</ca-card>
+
 
 <ca-card data-title-zh="zh title" data-title-en="en title">
 <button>The Button</button>
 </ca-card>
 
 
+<ca-card data-title-zh="zh title" data-title-en="en title">
+<button>The Button</button>
+</ca-card>
 
 
+</div> <div class="column">
+
+<ca-card data-title-zh="zh title" data-title-en="en title">
+<button>The Button</button>
+</ca-card>
 
 
+</div>
 
 
 [mixin] common.ymd
