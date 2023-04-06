@@ -1,0 +1,24 @@
+<template id="template-card">
+    <h3><ca-text></ca-text></h3>
+    <slot></slot>
+</template>
+
+<script>
+    customElements.define('ca-card', class extends HTMLElement {
+        constructor() {
+            super()
+            this.attachShadow({mode: 'open'})
+            this.shadowRoot.appendChild(document.querySelector('#template-card').content.cloneNode(true))
+            customElements.upgrade(this)
+
+            this.shadowRoot.prepend(document.querySelectorAll('style')[1].cloneNode(true))
+        }
+
+        connectedCallback() {
+            for (const attr of this.attributes) if (attr.name.startsWith('data-title-'))
+                this.shadowRoot.querySelector('ca-text').dataset[attr.name.slice(11)] = attr.value
+            this.shadowRoot.querySelector('ca-text').render()
+        }
+    })
+</script>
+

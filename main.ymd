@@ -5,9 +5,6 @@
 
 <title>Convex Alchemist</title>
 
-[#] Chrome only load font if it appear BOTH inside and outside the shadow dom
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css">
-
 <script>
 window.wasm_ready = (async () => {
 const buffer = Uint8Array.from(atob("[wasm]"), c => c.charCodeAt(0))
@@ -18,19 +15,31 @@ window.ca = x.instance.exports
 
 [wasm]= read("target/wasm32-unknown-unknown/release/ca.wasm", 'base64')
 
+[#] Chrome only load font if it appear BOTH inside and outside the shadow dom
+[#] Also, keep the two as the first two style elements cause we are cloning them in shadow
+[require](lib/katex.css)
+[require](main.less)
 
-[require](Katex.html)
-[require](Num.html)
+[require](lib/katex.js)
+[require](main.js)
 
+[require](components/Card.html)
+[require](components/Katex.html)
+[require](components/Num.html)
+[require](components/Text.html)
 
-
-<ca-katex>E = m\circ{}c^2_{\text{\tiny 汉字}} + \frac{x + y}{y}</ca-katex>
-
-[require](TestNum.html)
+[require](tests/TestNum.html)
 <test-num></test-num>
 
-[require](main.js)
+<ca-card data-title-zh="zh title" data-title-en="en title">
+<button>The Button</button>
+</ca-card>
+
+
+
+
+
+
 
 
 [mixin] common.ymd
-

@@ -3,24 +3,22 @@
 -->
 
 <template id="template-katex">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css">
     <div></div>
     <slot style="display: none;"></slot>
 </template>
 
-<script type="module">
-    import katex from 'https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.mjs'
-
+<script>
     customElements.define('ca-katex', class extends HTMLElement {
         constructor() {
             super()
-            const dom = document.getElementById('template-katex').content.cloneNode(true)
-            dom.querySelector('slot').addEventListener('slotchange', e => {
+            this.attachShadow({mode: 'open'})
+            this.shadowRoot.appendChild(document.querySelector('#template-katex').content.cloneNode(true))
+            customElements.upgrade(this)
+
+            this.shadowRoot.prepend(document.querySelector('style').cloneNode(true))
+            this.shadowRoot.querySelector('slot').addEventListener('slotchange', e => {
                 this.render_katex(e.target.assignedNodes()[0].textContent.trim())
             })
-
-            this.attachShadow({mode: 'open'})
-            this.shadowRoot.appendChild(dom)
         }
 
         render_katex(code) {
