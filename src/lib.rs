@@ -595,7 +595,7 @@ impl Game {
     fn new(rand_state: u32) -> Game {
         Game {
             rand_state,
-            day: 5,
+            day: 0,
             resources: game_def!().resources.iter().map(|_| ExpNum::from(0.)).collect(),
             buildings: game_def!().buildings.iter().map(|_| BTreeMap::new()).collect(),
             updates: vec![]
@@ -619,8 +619,6 @@ impl Game {
 
     fn handle_event(&mut self, message: JsonValue) -> Option<()> {
         let event = message["event"].as_str()?;
-
-        eprintln!("{}", event);
 
         let handler = game_def!().handlers.get(event)?;
         for h in handler {
@@ -660,7 +658,7 @@ impl IndexMut<BuildingId> for Game {
 
 
 #[no_mangle]
-static mut JSON_BUFFER: [usize; 3] = [0, 0, 0];
+static mut JSON_BUFFER: [u32; 3] = [0, 0, 0];
 
 // write to the json buffer. The client need to call free_json_buffer after reading it.
 unsafe fn write_json_buffer(value: JsonValue) {
@@ -697,8 +695,6 @@ unsafe extern fn game_new(rand_seed: u32) -> *mut Game {
     let mut game = Box::new(Game::new(rand_seed));
     game.handle_event(json!({ "event": "init" }));
 
-    let ptr = Box::into_raw(game);
-
     write_json_buffer(json!({
         "resources": game_def!().resources.iter().map(|r| json!({
             "name": r.name,
@@ -710,13 +706,9 @@ unsafe extern fn game_new(rand_seed: u32) -> *mut Game {
             "display_name": b.display_name,
             "detail": b.detail
         })).collect::<Vec<_>>(),
-
-        "game_resource": (*ptr).resources.iter().enumerate().map(|(i, r)| (game_def!(ResourceId(i)).name.to_string(), r.as_exp())).collect::<BTreeMap<String, f64>>()
-    
-        ,"game_day": (*ptr).day,
     }));
 
-    ptr
+    Box::into_raw(game)
 }
 
 #[no_mangle]
@@ -729,8 +721,6 @@ unsafe extern fn handle_event(game: *mut Game) {
     let game = &mut *game;
 
     if let Ok(event) = read_json_buffer() {
-        eprintln!("here");
-
         game.handle_event(event);
         game.post_update(json!({
             "event": "resources",
@@ -749,37 +739,17 @@ unsafe extern fn handle_event(game: *mut Game) {
     }
 }
 
-#[no_mangle]
-unsafe extern fn dump(game: *mut Game) {
-    let game = &mut *game;
-    write_json_buffer(json!({
-        "resources": game.resources.iter().enumerate().map(|(i, r)| (game_def!(ResourceId(i)).name.to_string(), r.as_exp())).collect::<BTreeMap<String, f64>>(),
-        "day": game.day,
-    }));
-}
-
 #[cfg(test)]
 mod test_game {
     use super::*;
 
-    // #[test]
-    // fn test_1() {
-    //     init_game_def();
-    //     let mut game = Game::new(0);
-    //     game.handle_event(json!({ "event": "init" }));
-    //     eprintln!("{:?}", game.resources);
-    //     game.handle_event(json!({ "event": "step" }));
-    //     eprintln!("{:?}", game.resources);
-    // }
-
     #[test]
-    fn test_2() {
-        unsafe {
-            let game = game_new(5);
-            eprintln!("{:?}", read_json_buffer());
-            write_json_buffer(json!({ "event": "step" }));
-            handle_event(game);
-            eprintln!("{:?}", read_json_buffer());
-        }
+    fn test_1() {
+        init_game_def();
+        let mut game = Game::new(0);
+        game.handle_event(json!({ "event": "init" }));
+        eprintln!("{:?}", game.resources);
+        game.handle_event(json!({ "event": "step" }));
+        eprintln!("{:?}", game.resources);
     }
 }

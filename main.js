@@ -180,12 +180,11 @@ function emit_event_to_wasm(ptr, e) {
 
 ;(async () => {
     const browser_compatability = check_browser_compatability()
-    console.log(browser_compatability)
+    console.info(browser_compatability)
 
     await wasm_ready
 
     game.ptr = ca.game_new(15151515)
     console.log(read_wasm_json())
-
 
 })()
