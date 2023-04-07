@@ -15,7 +15,7 @@
             this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
             customElements.upgrade(this)
 
-            this.shadowRoot.prepend(document.querySelector('style').cloneNode(true))
+            this.shadowRoot.prepend(document.querySelector('#style-katex').cloneNode(true))
             this.shadowRoot.querySelector('slot').addEventListener('slotchange', e => {
                 this.render_katex(e.target.assignedNodes()[0].textContent.trim())
             })
