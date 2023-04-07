@@ -576,7 +576,7 @@ fn init_game_def() {
         game[building_tent_id].insert("level".to_string(), BuildingProperty::Int(1));
     }));
 
-    
+
 }
 
 
@@ -619,6 +619,7 @@ impl Game {
 
     fn handle_event(&mut self, message: JsonValue) -> Option<()> {
         let event = message["event"].as_str()?;
+
         let handler = game_def!().handlers.get(event)?;
         for h in handler {
             h(self);
@@ -656,32 +657,32 @@ impl IndexMut<BuildingId> for Game {
 }
 
 
-static mut JSON_BUFFER_POINTER: [u32; 3] = [0, 0, 0];
+#[no_mangle]
+static mut JSON_BUFFER: [u32; 3] = [0, 0, 0];
 
-unsafe fn write_json(value: JsonValue) {
+// write to the json buffer. The client need to call free_json_buffer after reading it.
+unsafe fn write_json_buffer(value: JsonValue) {
     let raw_parts = serde_json::to_vec(&value).unwrap().into_raw_parts();
-    JSON_BUFFER_POINTER = [raw_parts.0 as _, raw_parts.1 as _, raw_parts.2 as _];
+    JSON_BUFFER = [raw_parts.0 as _, raw_parts.1 as _, raw_parts.2 as _];
 }
 
-unsafe fn read_json(ptr: *const u8, len: usize) -> serde_json::Result<JsonValue> {
-    let slice = std::slice::from_raw_parts(ptr, len);
-    serde_json::from_slice(slice)
-}
-
-#[no_mangle]
-unsafe extern fn alloc(byte_size: usize) -> *mut u8 {
-    let (ptr, _len, _capacity) = Vec::with_capacity(byte_size).into_raw_parts();
-    ptr
+// read from the json buffer AND free it.
+unsafe fn read_json_buffer() -> serde_json::Result<JsonValue> {
+    let [ptr, len, capacity] = JSON_BUFFER;
+    let buffer = Vec::from_raw_parts(ptr as *mut u8, len as _, capacity as _);
+    let json = serde_json::from_slice(&buffer);
+    json
 }
 
 #[no_mangle]
-unsafe extern fn free(ptr: *mut u8, byte_size: usize) {
-    let _ = Vec::from_raw_parts(ptr, 0, byte_size);
+unsafe extern fn alloc_json_buffer(byte_length: u32) {
+    let (ptr, len, capacity) = Vec::<u8>::with_capacity(byte_length as _).into_raw_parts();
+    JSON_BUFFER = [ptr as _, len as _, capacity as _];
 }
 
 #[no_mangle]
 unsafe extern fn free_json_buffer() {
-    let (ptr, len, capacity) = (JSON_BUFFER_POINTER[0] as *mut u8, JSON_BUFFER_POINTER[1] as _, JSON_BUFFER_POINTER[2] as _);
+    let (ptr, len, capacity) = (JSON_BUFFER[0] as *mut u8, JSON_BUFFER[1] as _, JSON_BUFFER[2] as _);
     let _ = Vec::from_raw_parts(ptr, len, capacity);
 }
 
@@ -694,7 +695,7 @@ unsafe extern fn game_new(rand_seed: u32) -> *mut Game {
     let mut game = Box::new(Game::new(rand_seed));
     game.handle_event(json!({ "event": "init" }));
 
-    write_json(json!({
+    write_json_buffer(json!({
         "resources": game_def!().resources.iter().map(|r| json!({
             "name": r.name,
             "display_name": r.display_name,
@@ -716,21 +717,39 @@ unsafe extern fn game_free(game: *mut Game) {
 }
 
 #[no_mangle]
-unsafe extern fn handle_event(game: *mut Game, message_ptr: *const u8, message_len: usize) {
-    if let Ok(event) = read_json(message_ptr, message_len) {
-        (*game).handle_event(event);
-        (*game).post_update(json!({
+unsafe extern fn handle_event(game: *mut Game) {
+    let game = &mut *game;
+
+    if let Ok(event) = read_json_buffer() {
+        game.handle_event(event);
+        game.post_update(json!({
             "event": "resources",
-            "resources": (*game).resources.iter().enumerate().map(|(i, r)| (game_def!(ResourceId(i)).name.to_string(), r.as_exp())).collect::<BTreeMap<String, f64>>()
+            "resources": game.resources.iter().enumerate().map(|(i, r)| (game_def!(ResourceId(i)).name.to_string(), r.as_exp())).collect::<BTreeMap<String, f64>>()
         }));
-        (*game).post_update(json!({
+        game.post_update(json!({
             "event": "status",
+            "day": game.day,
         }));
 
-        write_json(JsonValue::Array(std::mem::take(&mut (*game).updates)));
+        write_json_buffer(JsonValue::Array(std::mem::take(&mut game.updates)));
     } else {
-        write_json(json!({
+        write_json_buffer(json!({
             "error": "parsing message failed"
         }));
+    }
+}
+
+#[cfg(test)]
+mod test_game {
+    use super::*;
+
+    #[test]
+    fn test_1() {
+        init_game_def();
+        let mut game = Game::new(0);
+        game.handle_event(json!({ "event": "init" }));
+        eprintln!("{:?}", game.resources);
+        game.handle_event(json!({ "event": "step" }));
+        eprintln!("{:?}", game.resources);
     }
 }

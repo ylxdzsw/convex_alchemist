@@ -154,27 +154,37 @@ const game = {
 
     log(lang_dict) {
         game.emit('log', lang_dict)
+    },
+
+    step() {
+        emit_event_to_wasm(game.ptr, {event: 'step'})
     }
 }
 
+function read_wasm_json() {
+    const [ptr, len] = new Uint32Array(ca.memory.buffer, ca.JSON_BUFFER, 2)
+    const str = new TextDecoder().decode(new Uint8Array(ca.memory.buffer, ptr, len))
+    ca.free_json_buffer()
+    return JSON.parse(str)
+}
+
+function emit_event_to_wasm(ptr, e) {
+    const str = new TextEncoder().encode(JSON.stringify(e))
+    ca.alloc_json_buffer(str.length)
+    const buffer = new Uint32Array(ca.memory.buffer, ca.JSON_BUFFER, 2)
+    new Uint8Array(ca.memory.buffer, buffer[0], str.length).set(str)
+    buffer[1] = str.length
+    ca.handle_event(ptr)
+    console.log(read_wasm_json())
+}
 
 ;(async () => {
     const browser_compatability = check_browser_compatability()
-    console.log(browser_compatability)
+    console.info(browser_compatability)
 
     await wasm_ready
 
-    console.log(ca)
-
-    const ptr_buffer = ca.alloc_memory(12) // 4 * u32
-    ca.hello(ptr_buffer)
-    const [ptr, len, capacity] = new Uint32Array(ca.memory.buffer, ptr_buffer, 3)
-    console.log(ptr, len, capacity)
-    const str = new TextDecoder().decode(new Uint8Array(ca.memory.buffer, ptr, len))
-    console.log(str)
-    console.log(JSON.parse(str))
-    ca.free_memory(ptr, capacity)
-    ca.free_memory(ptr_buffer, 12)
-
+    game.ptr = ca.game_new(15151515)
+    console.log(read_wasm_json())
 
 })()
