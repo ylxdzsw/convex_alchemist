@@ -17,8 +17,7 @@ window.ca = x.instance.exports
 [wasm]= read("target/wasm32-unknown-unknown/release/ca.wasm", 'base64')
 
 [#] Chrome only load font if it appear BOTH inside and outside the shadow dom, even when inlined as data url
-[#] Also, keep it as the first style element because we are cloning it to use in shadow
-[require](lib/katex.css)
+[require].style-katex(lib/katex.css)
 [require](lib/katex.js)
 [require](main.less)
 [require](main.js)
@@ -41,6 +40,11 @@ window.ca = x.instance.exports
 [require](log.html)
 [require](settings.html)
 
+</div>
+
+<div id="bottom-notice">
+Copyright © 2023: ca@ylxdzsw.com <br>
+<a href="https://github.com/ylxdzsw/convex_alchemist">Source code under MIT license</a>
 </div>
 
 [mixin] common.ymd
