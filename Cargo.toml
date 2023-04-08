@@ -5,6 +5,7 @@ authors = ["Shiwei Zhang <ylxdzsw@gmail.com>"]
 edition = "2021"
 
 [lib]
+path = "ca.rs"
 crate-type = ["lib", "cdylib"]
 
 [profile.release]

@@ -70,42 +70,6 @@ function html_to_element(html) {
     return container.content.firstChild
 }
 
-// the event is structued as a tree with dot in names
-// so emit("a.b.c", ...) will emit "a", "a.b", "a.b.c"
-class EventBus {
-    constructor() {
-        this.events = Object.create(null)
-    }
-
-    on(event, callback, invoke_immediately = false) {
-        this.events[event] ??= [] // WeakSet is not iterable
-        this.events[event].push(new WeakRef(callback))
-        if (invoke_immediately) callback()
-    }
-
-    emit(event, ...args) {
-        const events = event.split('.')
-        for (let i = 0; i < events.length; i++) {
-            this.emit_exact(events.slice(0, i + 1).join('.'), ...args)
-        }
-    }
-
-    emit_exact(event, ...args) {
-        const callbacks = this.events[event] ?? []
-
-        for (let i = 0; i < callbacks.length; i++) {
-            const callback = callbacks[i].deref()
-            if (callback) {
-                callback(...args)
-            } else {
-                callbacks[i] = callbacks[callbacks.length - 1]
-                callbacks.pop()
-                i--
-            }
-        }
-    }
-}
-
 const number_format_cut_offs = [ // in exp
     Math.log(0.001),
     0,
@@ -115,7 +79,7 @@ const number_format_cut_offs = [ // in exp
 ]
 
 const game = {
-    event_bus: new EventBus(),
+    handlers: Object.create(null),
 
     ptr: null,
 
@@ -136,7 +100,7 @@ const game = {
                 get() { return this['_'+name] },
                 set(value) {
                     this['_'+name] = value
-                    game.emit('config.'+name, value)
+                    game.dispatch_message('config.'+name, value)
                 }
             })
         }
@@ -144,38 +108,74 @@ const game = {
         return config
     })(),
 
-    on(...args) {
-        game.event_bus.on(...args)
+    on(event, callback) {
+        game.handlers[event] ??= [] // WeakSet is not iterable
+        game.handlers[event].push(new WeakRef(callback))
     },
 
-    emit(...args) {
-        game.event_bus.emit(...args)
+    dispatch_message(message) {
+        console.log("dispatch_message", message)
+        const callbacks = game.handlers[message.event] ?? []
+        if (!callbacks.length) console.warn("message no handler", message)
+        for (let i = 0; i < callbacks.length; i++) {
+            const callback = callbacks[i].deref()
+            if (callback) {
+                callback(...args)
+            } else {
+                callbacks[i] = callbacks[callbacks.length - 1]
+                callbacks.pop()
+                i--
+            }
+        }
     },
 
     log(lang_dict) {
-        game.emit('log', lang_dict)
+        game.dispatch_message({
+            event: 'log',
+            content: lang_dict
+        })
+    },
+
+    /// reads the json buffer and returns the parsed json
+    read_wasm_json() {
+        const [ptr, len] = new Uint32Array(ca.memory.buffer, ca.JSON_BUFFER, 2)
+        const str = new TextDecoder().decode(new Uint8Array(ca.memory.buffer, ptr, len))
+        ca.free_json_buffer()
+        return JSON.parse(str)
+    },
+
+    /// reads the json buffer and process the messages
+    process_back_message() {
+        for (const message of game.read_wasm_json())
+            game.dispatch_message(message)
+    },
+
+    /// the returned message is left in the buffer and should be read immediately
+    post_message_back(e) {
+        console.log("post_message_back", e)
+        const str = new TextEncoder().encode(JSON.stringify(e))
+        ca.alloc_json_buffer(str.length)
+        const buffer = new Uint32Array(ca.memory.buffer, ca.JSON_BUFFER, 2)
+        new Uint8Array(ca.memory.buffer, buffer[0], str.length).set(str)
+        buffer[1] = str.length
+        ca.poll(game.ptr)
+    },
+
+    /// this is the method to be used most of the time
+    pool_with_message(e) {
+        game.post_message_back(e)
+        game.process_back_message()
     },
 
     step() {
-        emit_event_to_wasm(game.ptr, {event: 'step'})
+        game.post_message_back({event: 'step'})
+    },
+
+    init_game() {
+        if (game.ptr) throw new Error('game already initialized')
+        game.ptr = ca.game_new(1145141919)
+        game.pool_with_message({event: 'init'})
     }
-}
-
-function read_wasm_json() {
-    const [ptr, len] = new Uint32Array(ca.memory.buffer, ca.JSON_BUFFER, 2)
-    const str = new TextDecoder().decode(new Uint8Array(ca.memory.buffer, ptr, len))
-    ca.free_json_buffer()
-    return JSON.parse(str)
-}
-
-function emit_event_to_wasm(ptr, e) {
-    const str = new TextEncoder().encode(JSON.stringify(e))
-    ca.alloc_json_buffer(str.length)
-    const buffer = new Uint32Array(ca.memory.buffer, ca.JSON_BUFFER, 2)
-    new Uint8Array(ca.memory.buffer, buffer[0], str.length).set(str)
-    buffer[1] = str.length
-    ca.handle_event(ptr)
-    console.log(read_wasm_json())
 }
 
 ;(async () => {
@@ -184,7 +184,11 @@ function emit_event_to_wasm(ptr, e) {
 
     await wasm_ready
 
-    game.ptr = ca.game_new(15151515)
-    console.log(read_wasm_json())
-
+    game.init_game()
 })()
+
+/*
+some notes:
+    1. if event handler is not triggered, it is almost certainly because of WeakRef
+    2. create typed array view everytime because the memory may be moved
+*/

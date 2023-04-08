@@ -22,12 +22,9 @@ window.ca = x.instance.exports
 [require](main.less)
 [require](main.js)
 
-[require](components/Card.html)
-[require](components/Katex.html)
-[require](components/Num.html)
-[require](components/Text.html)
-
-[require](tests/TestNum.html)
+[require](Card.html)
+[require](Katex.html)
+[require](Text.html)
 
 <div class="column">
 
@@ -44,7 +41,7 @@ window.ca = x.instance.exports
 
 <div id="bottom-notice">
 Copyright © 2023: ca@ylxdzsw.com <br>
-<a href="https://github.com/ylxdzsw/convex_alchemist">Source code under MIT license</a>
+<a href="https://github.com/ylxdzsw/convex_alchemist">Source code available under the MIT license</a>
 </div>
 
 [mixin] common.ymd
