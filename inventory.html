@@ -1,11 +1,71 @@
+<template id="template-item">
+    <style>
+        :host {
+            display: none;
+        }
+        :host(.unlocked) {
+            display: block;
+        }
+    </style>
+    <ca-text class="name"></ca-text>
+    <span class="amount"></span>
+</template>
+
+<script>
+    customElements.define('ca-item', class extends HTMLElement {
+        constructor() {
+            super()
+            const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
+            this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
+            customElements.upgrade(this)
+        }
+
+        connectedCallback() {
+            this.name = this.getAttribute('data-name')
+            for (const attr of this.attributes) if (attr.name.startsWith('data-display-name-'))
+                this.shadowRoot.querySelector('.name').dataset[attr.name.slice(18)] = attr.value
+            this.shadowRoot.querySelector('.name').render()
+
+            game.on(`resources`, e => {
+                if (e[this.name] === undefined) return
+                this.shadowRoot.querySelector('.amount').innerHTML = e[this.name]
+                this.classList.add('unlocked')
+            })
+        }
+    })
+</script>
+
+
 <ca-card
     id="inventory-card"
     data-title-zh="仓库"
     data-title-en="Inventory"
 >
+<div id="inventory-items">
 
+</div>
 </ca-card>
 
-<script type="module">
+<style>
+    #items {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+    }
+</style>
 
+<script type="module">
+    game.on('init', e => {
+        for (const resource_def of e.resources) {
+            const item = document.createElement('ca-item')
+            item.dataset.name = resource_def.name
+            for (const [lang, display_name] of Object.entries(resource_def.display_name))
+                item.setAttribute(`data-display-name-${lang}`, display_name)
+            item.id = `inventory-item-${resource_def.name}`
+            document.querySelector('#inventory-items').append(item)
+        }
+
+        // special: unlock man on init
+        document.querySelector(`#inventory-item-man`).classList.add('unlocked')
+    })
 </script>

@@ -120,7 +120,7 @@ const game = {
         for (let i = 0; i < callbacks.length; i++) {
             const callback = callbacks[i].deref()
             if (callback) {
-                callback(...args)
+                callback(message)
             } else {
                 callbacks[i] = callbacks[callbacks.length - 1]
                 callbacks.pop()
@@ -178,14 +178,14 @@ const game = {
     }
 }
 
-;(async () => {
+addEventListener("DOMContentLoaded", async () => {
     const browser_compatability = check_browser_compatability()
     console.info(browser_compatability)
 
     await wasm_ready
 
     game.init_game()
-})()
+})
 
 /*
 some notes:
