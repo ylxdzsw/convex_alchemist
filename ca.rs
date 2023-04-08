@@ -5,12 +5,20 @@
 #![feature(const_trait_impl)]
 #![feature(const_mut_refs)]
 
-use std::{collections::BTreeMap, fmt::Debug, ops::{Index, IndexMut}, rc::Rc};
+use std::{collections::BTreeMap, fmt::Debug, ops::{Index, IndexMut}, rc::Rc, f64::consts::LN_10, borrow::Borrow};
 use indoc::formatdoc;
 use serde_json::{json, Value as JsonValue};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
 struct ExpNum(f64);
+
+static NUMBER_FORMAT_CUTOFF: [ExpNum; 5] = [ // unfortunately float arithmetic is not const
+    ExpNum(-6.907755278982137), // 0.001
+    ExpNum(0.),
+    ExpNum(9.210340371976184), // 10000
+    ExpNum(27. * LN_10),
+    ExpNum(10000.)
+];
 
 impl ExpNum {
     fn from_exp(f: impl Into<f64>) -> Self {
@@ -29,6 +37,86 @@ impl ExpNum {
 
     fn pow(self, rhs: impl Into<f64>) -> Self {
         Self(self.0 * rhs.into())
+    }
+
+    fn format(&self, format: &str, output_type: &str) -> String {
+        if self.0 == f64::NEG_INFINITY {
+            return String::from("0");
+        }
+    
+        match format {
+            "a" => {
+                if self < &ExpNum::from(1.) || self > &ExpNum::from_exp(f64::ln(1000.0) * 27.0 - 1e-9) {
+                    panic!("out of range: num={}, format={}", self, format);
+                }
+    
+                if self < &ExpNum::from(1000.) {
+                    return format!("{:.2}", f64::from(*self));
+                }
+    
+                let scale = (self.as_exp() / f64::ln(1000.0) + 1e-9).floor();
+                let significand_f64 = f64::from(*self / ExpNum::from(1000.).pow(ExpNum::from(scale)));
+                let significand_str = if significand_f64 < 10.0 {
+                    format!("{:.3}", significand_f64)
+                } else if significand_f64 < 100.0 {
+                    format!("{:.2}", significand_f64)
+                } else {
+                    format!("{:.1}", significand_f64)
+                };
+                format!("{}{a}{a}", significand_str, a = (b'a' - 1 + scale as u8) as char)
+            }
+            "10" => {
+                let scale = (self.as_exp() / LN_10 + 1e-9).floor();
+                let significand_f64 = f64::from(*self / ExpNum::from_exp(LN_10).pow(ExpNum::from(scale)));
+                match output_type {
+                    "tex" => format!("<ca-katex>{:.2}\\times{{}}10^{{{}}}</ca-katex>", significand_f64, scale as i32),
+                    "html" => format!("{:.2}×10<sup>{}</sup>", significand_f64, scale as i32),
+                    "plain" => format!("{:.2}E{}", significand_f64, scale as i32),
+                    _ => panic!(),
+                }
+            }
+            "e" => {
+                match output_type {
+                    "tex" => format!("<ca-katex>e^{{{:.3}}}</ca-katex>", self.as_exp()),
+                    "html" => format!("ℯ<sup>{:.3}</sup>", self.as_exp()),
+                    "plain" => format!("e{:.3}", self.as_exp()),
+                    _ => panic!(),
+                }
+            }
+            "d" => {
+                if self >= &ExpNum::from_exp(LN_10 * 10.0) || self < &ExpNum::from(0.001) {
+                    panic!("out of range: num={}, format={}", self, format);
+                }
+                if self > &ExpNum::from(10. - 1e-9) {
+                    format!("{:.2}", f64::from(*self))
+                } else if self >= &ExpNum::from(1. - 1e-9) {
+                    format!("{:.3}", f64::from(*self))
+                } else {
+                    format!("{:.4}", f64::from(*self))
+                }
+            }
+            "ee" => {
+                if self < &ExpNum::from_exp(1e-9) {
+                    panic!("out of range: num={}, format={}", self, format);
+                }
+    
+                match output_type {
+                    "tex" => format!("<ca-katex>e^{{e^{{{:.3}}}}}</ca-katex>", self.as_exp()),
+                    "html" => format!("ℯ<sup>ℯ<sup>{:.3}</sup></sup>", self.as_exp()),
+                    "plain" => format!("ee{:.3}", self.as_exp()),
+                    _ => panic!(),
+                }
+            }
+            _ => panic!(),
+        }
+    }
+
+    fn format_with_preference(&self, preference: &[impl Borrow<str>], output_type: &str) -> String {
+        let mut i = 0;
+        while i < NUMBER_FORMAT_CUTOFF.len() && self > &NUMBER_FORMAT_CUTOFF[i] {
+            i += 1;
+        }
+        return self.format(preference[i].borrow(), output_type);
     }
 }
 
@@ -230,7 +318,7 @@ impl BuildingProperty {
 struct GameDef {
     resources: Vec<Resource>,
     buildings: Vec<Building>,
-    handlers: BTreeMap<String, Vec<Box<dyn Fn(&mut Game)>>>
+    handlers: BTreeMap<String, Vec<Box<dyn Fn(&mut Game, &JsonValue)>>>
 }
 
 impl Index<ResourceId> for GameDef {
@@ -258,7 +346,7 @@ impl GameDef {
         }
     }
 
-    fn add_handler(&mut self, name: impl ToString, handler: Box<dyn Fn(&mut Game)>) {
+    fn add_handler(&mut self, name: impl ToString, handler: Box<dyn Fn(&mut Game, &JsonValue)>) {
         self.handlers.entry(name.to_string()).or_default().push(handler);
     }
 
@@ -281,11 +369,11 @@ macro_rules! game_def {
 fn init_game_def() {
     let game_def = unsafe { &mut GAME_DEF } ;
 
-    game_def.add_handler("step", Box::new(move |game| {
+    game_def.add_handler("step", Box::new(move |game, _msg| {
         game.day += 1
     }));
 
-    game_def.add_handler("init", Box::new(move |game| {
+    game_def.add_handler("init", Box::new(move |game, _msg| {
         game.post_message_front(json!({
             "event": "init",
     
@@ -300,6 +388,13 @@ fn init_game_def() {
                 "detail": b.detail
             })).collect::<Vec<_>>(),
         }))
+    }));
+
+    game_def.add_handler("format_preference.update", Box::new(move |game, msg| {
+        game.format_preference = msg["format_preference"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
+        game.dispatch_message(json!({
+            "event": "format_preference.updated"
+        }));
     }));
 
     let resource_man_id = ResourceId(game_def.resources.len());
@@ -388,7 +483,7 @@ fn init_game_def() {
         let id = BuildingId(game_def.buildings.len());
         game_def.buildings.push(building);
 
-        game_def.add_handler("step".to_string(), Box::new(move |game| {
+        game_def.add_handler("step".to_string(), Box::new(move |game, _msg| {
             if !game[id]["enabled"].as_bool() {
                 return;
             }
@@ -430,7 +525,7 @@ fn init_game_def() {
             }))
         }));
 
-        game_def.add_handler(format!("{name}.build"), Box::new(move |game| {
+        game_def.add_handler(format!("{name}.build"), Box::new(move |game, _msg| {
             if !game[id]["unlocked"].as_bool() {
                 return;
             }
@@ -465,7 +560,7 @@ fn init_game_def() {
             }));
         }));
 
-        game_def.add_handler(format!("{name}.enable"), Box::new(move |game| {
+        game_def.add_handler(format!("{name}.enable"), Box::new(move |game, _msg| {
             if !game[id]["built"].as_bool() {
                 return;
             }
@@ -476,7 +571,7 @@ fn init_game_def() {
             }));
         }));
 
-        game_def.add_handler(format!("{name}.disable"), Box::new(move |game| {
+        game_def.add_handler(format!("{name}.disable"), Box::new(move |game, _msg| {
             if !game[id]["built"].as_bool() {
                 return;
             }
@@ -487,7 +582,7 @@ fn init_game_def() {
             }));
         }));
 
-        game_def.add_handler(format!("{name}.upgrade"), Box::new(move |game| {
+        game_def.add_handler(format!("{name}.upgrade"), Box::new(move |game, _msg| {
             if !game[id]["built"].as_bool() {
                 return;
             }
@@ -518,7 +613,7 @@ fn init_game_def() {
             }));
         }));
 
-        game_def.add_handler(format!("{name}.downgrade"), Box::new(move |game| {
+        game_def.add_handler(format!("{name}.downgrade"), Box::new(move |game, _msg| {
             if !game[id]["built"].as_bool() {
                 return;
             }
@@ -580,7 +675,7 @@ fn init_game_def() {
         vec![]
     }));
 
-    game_def.add_handler("init", Box::new(move |game| {
+    game_def.add_handler("init", Box::new(move |game, _msg| {
         game[building_tent_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
         game[building_tent_id].insert("built".to_string(), BuildingProperty::Bool(true));
         game[building_tent_id].insert("enabled".to_string(), BuildingProperty::Bool(true));
@@ -593,23 +688,26 @@ fn init_game_def() {
 
 struct Game {
     rand_state: u32,
+    message_queue: Vec<JsonValue>,
 
     day: u32,
-
     resources: Vec<ExpNum>,
     buildings: Vec<BTreeMap<String, BuildingProperty>>,
 
-    message_queue: Vec<JsonValue>,
+    format_preference: Vec<String>
 }
 
 impl Game {
     fn new(rand_state: u32) -> Game {
         Game {
             rand_state,
+            message_queue: vec![],
+
             day: 0,
             resources: game_def!().resources.iter().map(|_| ExpNum::from(0.)).collect(),
             buildings: game_def!().buildings.iter().map(|_| BTreeMap::new()).collect(),
-            message_queue: vec![]
+
+            format_preference: ["e", "d", "d", "e", "e", "ee"].into_iter().map(|s| s.to_string()).collect()
         }
     }
 
@@ -633,7 +731,7 @@ impl Game {
 
         let handler = game_def!().handlers.get(event)?;
         for h in handler {
-            h(self);
+            h(self, &message);
         }
         Some(())
     }
@@ -648,7 +746,9 @@ impl Game {
     fn post_resources(&mut self) {
         self.post_message_front(json!({
             "event": "resources",
-            "resources": self.resources.iter().enumerate().map(|(i, r)| (game_def!(ResourceId(i)).name.to_string(), r.as_exp())).collect::<BTreeMap<String, f64>>()
+            "resources": self.resources.iter().enumerate().map(|(i, r)| {
+                (game_def!(ResourceId(i)).name.to_string(), r.format_with_preference(&self.format_preference, "html"))
+            }).collect::<BTreeMap<String, String>>()
         }));
     }
 
