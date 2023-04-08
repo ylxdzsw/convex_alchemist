@@ -313,6 +313,28 @@ impl BuildingProperty {
             _ => unreachable!()
         }
     }
+
+    fn to_json(&self) -> JsonValue {
+        match self {
+            BuildingProperty::Int(x) => json!(["int", x]),
+            BuildingProperty::Num(x) => json!(["num", x.as_exp()]),
+            BuildingProperty::Bool(x) => json!(["bool", x])
+        }
+    }
+
+    fn from_json(json: &JsonValue) -> Self {
+        match json {
+            JsonValue::Array(arr) => {
+                match arr[0].as_str().unwrap() {
+                    "int" => BuildingProperty::Int(arr[1].as_u64().unwrap() as _),
+                    "num" => BuildingProperty::Num(ExpNum::from_exp(arr[1].as_f64().unwrap())),
+                    "bool" => BuildingProperty::Bool(arr[1].as_bool().unwrap()),
+                    _ => unreachable!()
+                }
+            },
+            _ => unreachable!()
+        }
+    }
 }
 
 struct GameDef {
@@ -377,17 +399,17 @@ fn init_game_def() {
         game.post_message_front(json!({
             "event": "init",
     
-            "resources": game_def!().resources.iter().map(|r| json!({
+            "resource_defs": game_def!().resources.iter().map(|r| json!({
                 "name": r.name,
                 "display_name": r.display_name,
             })).collect::<Vec<_>>(),
     
-            "buildings": game_def!().buildings.iter().map(|b| json!({
+            "building_defs": game_def!().buildings.iter().map(|b| json!({
                 "name": b.name,
                 "display_name": b.display_name,
                 "detail": b.detail
             })).collect::<Vec<_>>(),
-        }))
+        }));
     }));
 
     game_def.add_handler("format_preference.update", Box::new(move |game, msg| {
@@ -493,9 +515,7 @@ fn init_game_def() {
             for &(resource_id, cost) in &costs {
                 if game[resource_id] < cost {
                     game[id].insert("enabled".to_string(), BuildingProperty::Bool(false));
-                    game.post_message_front(json!({
-                        "event": format!("{name}.update")
-                    }));
+                    game.post_building_properties(id);
                     game.post_message_front(json!({
                         "event": "log",
                         "content": {
@@ -516,11 +536,11 @@ fn init_game_def() {
 
             for &(resource_id, amount) in &products {
                 game[resource_id] += amount;
-                income_json.insert(game_def!(resource_id).name.to_string(), json!(amount.as_exp()));
+                income_json.insert(game_def!(resource_id).name.to_string(), json!(amount.format_with_preference(&game.format_preference, "html")));
             }
 
             game.post_message_front(json!({
-                "event": format!("{name}.update"),
+                "event": format!("{name}.income"),
                 "income": income_json
             }))
         }));
@@ -552,9 +572,7 @@ fn init_game_def() {
             game[id].insert("built".to_string(), BuildingProperty::Bool(true));
             game[id].insert("enabled".to_string(), BuildingProperty::Bool(true));
             game[id].insert("level".to_string(), BuildingProperty::Int(1));
-            game.post_message_front(json!({
-                "event": format!("{name}.update")
-            }));
+            game.post_building_properties(id);
             game.dispatch_message(json!({
                 "event": format!("{name}.built")
             }));
@@ -566,9 +584,7 @@ fn init_game_def() {
             }
 
             game[id].insert("enabled".to_string(), BuildingProperty::Bool(true));
-            game.post_message_front(json!({
-                "event": format!("{name}.update")
-            }));
+            game.post_building_properties(id);
         }));
 
         game_def.add_handler(format!("{name}.disable"), Box::new(move |game, _msg| {
@@ -577,9 +593,7 @@ fn init_game_def() {
             }
 
             game[id].insert("enabled".to_string(), BuildingProperty::Bool(false));
-            game.post_message_front(json!({
-                "event": format!("{name}.update")
-            }));
+            game.post_building_properties(id);
         }));
 
         game_def.add_handler(format!("{name}.upgrade"), Box::new(move |game, _msg| {
@@ -608,9 +622,7 @@ fn init_game_def() {
 
             let current_level = game[id]["level"].as_int();
             game[id].insert("level".to_string(), BuildingProperty::Int(current_level + 1));
-            game.post_message_front(json!({
-                "event": format!("{name}.update")
-            }));
+            game.post_building_properties(id);
         }));
 
         game_def.add_handler(format!("{name}.downgrade"), Box::new(move |game, _msg| {
@@ -624,9 +636,7 @@ fn init_game_def() {
             }
 
             game[id].insert("level".to_string(), BuildingProperty::Int(current_level - 1));
-            game.post_message_front(json!({
-                "event": format!("{name}.update")
-            }));
+            game.post_building_properties(id);
         }));
 
         id
@@ -680,6 +690,7 @@ fn init_game_def() {
         game[building_tent_id].insert("built".to_string(), BuildingProperty::Bool(true));
         game[building_tent_id].insert("enabled".to_string(), BuildingProperty::Bool(true));
         game[building_tent_id].insert("level".to_string(), BuildingProperty::Int(1));
+        game.post_building_properties(building_tent_id);
     }));
 
 
@@ -758,6 +769,16 @@ impl Game {
             "content": error
         }));
     }
+
+    fn post_building_properties(&mut self, building_id: BuildingId) {
+        let name = game_def!(BuildingId(building_id.0)).name;
+        self.post_message_front(json!({
+            "event": format!("{name}.properties"),
+            "properties": self.buildings[building_id.0].iter().map(|(k, v)| {
+                (k.to_string(), v.to_json())
+            }).collect::<BTreeMap<String, JsonValue>>()
+        }));
+    }    
 }
 
 impl Index<ResourceId> for Game {

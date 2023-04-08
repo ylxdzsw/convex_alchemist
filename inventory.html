@@ -56,7 +56,7 @@
 
 <script type="module">
     game.on('init', e => {
-        for (const resource_def of e.resources) {
+        for (const resource_def of e.resource_defs) {
             const item = document.createElement('ca-item')
             item.dataset.name = resource_def.name
             for (const [lang, display_name] of Object.entries(resource_def.display_name))

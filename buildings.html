@@ -1,3 +1,96 @@
+<template id="template-building">
+    <style>
+        :host {
+            display: none;
+            border: #bbb 1px solid;
+            border-radius: 5px;
+            overflow-y: hidden;
+            height: 2rem; /* the height of header */
+            padding: 0 .5rem;
+        }
+        :host(.unlocked) {
+            display: block;
+        }
+        :host(.expanded) {
+            height: auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 2rem;
+        }
+        .header .name {
+            font-weight: bold;
+        }
+        .detail {
+            font-size: .9rem;
+        }
+        .operation {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            height: 2rem;
+        }
+    </style>
+
+    <div class="header">
+        <ca-text class="name"></ca-text>
+        <span class="income"></span>
+    </div>
+
+    <div class="body">
+        <div class="detail">
+        </div>
+        <div class="operation">
+            <button></button>
+        </div>
+    </div>
+</template>
+
+<script>
+    customElements.define('ca-building', class extends HTMLElement {
+        constructor() {
+            super()
+            const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
+            this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
+            customElements.upgrade(this)
+        }
+
+        connectedCallback() {
+            for (const [lang, display_name] of Object.entries(this.display_name))
+                this.shadowRoot.querySelector('.header .name').dataset[lang] = display_name
+            this.shadowRoot.querySelector('.header .name').render()
+
+            game.on(`${this.name}.income`, this.income_callback = e => {
+                let str = ''
+                for (const [resource, income] of Object.entries(e.income)) {
+                    const display_name = document.querySelector(`ca-item[data-name="${resource}"]`).shadowRoot.querySelector("ca-text").shadowRoot.textContent
+                    str += `${display_name}: ${income} `
+                }
+                this.shadowRoot.querySelector('.header .income').innerHTML = str
+            })
+
+            game.on(`${this.name}.properties`, this.properties_callback = e => {
+                if (e.properties.unlocked !== undefined && e.properties.unlocked[1])
+                    this.classList.add('unlocked')
+            })
+
+            const detail = this.shadowRoot.querySelector('.detail')
+            detail.innerHTML = this.detail[game.config.lang] ?? this.detail['zh']
+            game.on('config.lang', detail.lang_callback = e => {
+                detail.innerHTML = this.detail[e.lang] ?? this.detail['zh']
+            })
+
+            this.shadowRoot.querySelector('.header').addEventListener('click', e => {
+                this.classList.toggle('expanded')
+            })
+        }
+    })
+</script>
+
+
+
 <ca-card
     id="building-card"
     data-title-zh="建築"
@@ -7,5 +100,12 @@
 </ca-card>
 
 <script type="module">
-
+    game.on('init', e => {
+        for (const building_def of e.building_defs) {
+            const building = document.createElement('ca-building')
+            Object.assign(building, building_def)
+            building.id = `building-${building_def.name}`
+            document.querySelector('#building-card').append(building)
+        }
+    })
 </script>
