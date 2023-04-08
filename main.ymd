@@ -24,6 +24,7 @@ window.ca = x.instance.exports
 
 [require](Card.html)
 [require](Katex.html)
+[require](Resource.html)
 [require](Text.html)
 
 <div class="column">

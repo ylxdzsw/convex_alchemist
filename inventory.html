@@ -1,13 +1,18 @@
 <template id="template-item">
     <style>
         :host {
+            box-sizing: border-box;
             display: none;
+            width: 50%;
         }
         :host(.unlocked) {
             display: block;
         }
+        .name {
+            font-weight: bold;
+        }
     </style>
-    <ca-text class="name"></ca-text>
+    <ca-text class="name"></ca-text>: 
     <span class="amount"></span>
 </template>
 
@@ -21,10 +26,7 @@
         }
 
         connectedCallback() {
-            this.name = this.getAttribute('data-name')
-            for (const attr of this.attributes) if (attr.name.startsWith('data-display-name-'))
-                this.shadowRoot.querySelector('.name').dataset[attr.name.slice(18)] = attr.value
-            this.shadowRoot.querySelector('.name').render()
+            this.shadowRoot.querySelector('.name').set_content(this.display_name)
 
             game.on(`resources`, this.resource_update_callback = e => {
                 this.shadowRoot.querySelector('.amount').innerHTML = e.resources[this.name]
@@ -55,12 +57,12 @@
 </style>
 
 <script type="module">
-    game.on('init', e => {
-        for (const resource_def of e.resources) {
+    const card = document.querySelector('#inventory-card')
+
+    game.on('init', card.init = e => {
+        for (const resource_def of e.resource_defs) {
             const item = document.createElement('ca-item')
-            item.dataset.name = resource_def.name
-            for (const [lang, display_name] of Object.entries(resource_def.display_name))
-                item.setAttribute(`data-display-name-${lang}`, display_name)
+            Object.assign(item, resource_def)
             item.id = `inventory-item-${resource_def.name}`
             document.querySelector('#inventory-items').append(item)
         }

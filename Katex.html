@@ -22,6 +22,11 @@
         }
 
         render_katex(code) {
+            if (this.hasAttribute('display'))
+                this.shadowRoot.querySelector("div").style.display = 'block'
+            else
+                this.shadowRoot.querySelector("div").style.display = 'inline'
+
             katex.render(code, this.shadowRoot.querySelector("div"), {
                 displayMode: this.hasAttribute('display'),
                 output: 'html'

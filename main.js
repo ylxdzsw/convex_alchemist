@@ -3,6 +3,18 @@ function check_browser_compatability() {
         `template element: ${'content' in document.createElement('template')}\n`
 }
 
+function read_user_language() {
+    let languages = navigator.languages ?? [navigator.language]
+
+    const lang = location.search.match(/lang=([a-z]+)/)
+    if (lang) languages = [lang[1]]
+
+    for (const lang of languages) {
+        if (lang.startsWith('zh')) return 'zh'
+        return 'en'
+    }
+}
+
 // function html_to_element(html) {
 //     const container = document.createElement('template')
 //     container.innerHTML = html.trim()
@@ -18,7 +30,7 @@ const game = {
     // lang should be kept front-end since there are text exlusive on the front end
     config: (() => {
         const init = {
-            'lang': 'zh',
+            'lang': read_user_language(),
         }
 
         const config = Object.create(null)
@@ -97,13 +109,23 @@ const game = {
 
     step() {
         game.pool_with_message({event: 'step'})
+        for (const building of document.querySelectorAll('ca-building.expanded'))
+            game.pool_with_message({event: `${building.name}.detail`})
     },
 
     init_game() {
         if (game.ptr) throw new Error('game already initialized')
         game.ptr = ca.game_new(1145141919)
         game.pool_with_message({event: 'init'})
-    }
+        game.show_help()
+    },
+
+    show_help() {
+        game.log({
+            zh: `游戏初始化完成。点击“前进一天”推动游戏进程。点击建筑名称打开详情页。`,
+            en: `Game initialized. Click "step" to advance the game. Click building name to open details.`,
+        })
+    },
 }
 
 addEventListener("DOMContentLoaded", async () => {

@@ -3,39 +3,44 @@
     data-title-zh="日志"
     data-title-en="Log"
 >
-<pre id="log">
-
-</pre>
+<div id="log-container"></div>
 </ca-card>
 
 <style>
-    #log {
-        font-family: monospace;
-        color: #222;
+    #log-container {
         border: 1px solid #bcd;
         background-color: #ebf1f5;
         padding: .5rem .8rem;
         margin: 0;
-        overflow: auto;
-        font-size: .7rem;
+        overflow-y: auto;
         height: 16rem;
+    }
+
+    #log-container .log {
+        font-family: monospace;
+        color: #222;
+        font-size: .8rem;
+        margin: .5em 0 0;
+        width: 100%;
+        line-height: 1.15;
     }
 </style>
 
 <script type="module">
-    const log = document.querySelector('#log')
+    const container = document.querySelector('#log-container')
 
-    log.textContent = '' // remove the empty line
+    game.on('log', container.log = e => {
+        // a bit hacky
+        const date = document.querySelector('#status-speed-control-day').shadowRoot.textContent.trim()
+        const content = e.content[game.config.lang] ?? e.content['zh']
+        const el = document.createElement("p")
+        el.classList.add('log')
+        el.textContent = date + ': ' + content
+        container.append(el)
 
-    game.on('log', log.log = lang_dict => {
-        let str;
-        switch (game.config.lang) {
-            case 'zh': str = `第${game.state.day}天：`; break
-            case 'en': str = `Day ${game.state.day}: `; break
-        }
+        while (container.childNodes.length > 256)
+            container.firstChild.remove()
 
-        str += lang_dict[game.config.lang] ?? lang_dict['zh']
-        log.textContent += str + '\n'
-        log.scrollTop = log.scrollHeight
+        container.scrollTop = container.scrollHeight
     })
 </script>

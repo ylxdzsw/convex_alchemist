@@ -1,3 +1,202 @@
+<template id="template-building">
+    <style>
+        :host {
+            display: none;
+            border: #bbb 1px solid;
+            border-radius: 5px;
+            overflow-y: hidden;
+            height: 2rem; /* the height of header */
+            padding: 0 .5rem;
+        }
+        :host(.unlocked) {
+            display: block;
+        }
+        :host(.expanded) {
+            height: auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 2rem;
+        }
+        .header .name {
+            font-weight: bold;
+        }
+        .detail {
+            font-size: .9rem;
+        }
+        .operation {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-bottom: .4rem;
+        }
+
+        .build-cost { display: inline; }
+        :host(.built) .build-cost { display: none; }
+
+        .cost { display: none; }
+        :host(.built) .cost { display: inline; }
+
+        .product { display: none; }
+        :host(.built) .product { display: inline; }
+
+        .upgrade-cost { display: none; }
+        :host(.built) .upgrade-cost { display: inline; }
+
+        :host(.built) .build { display: none; }
+
+        ca-text.disabled { color: #bbb; }
+        :host(.enabled) ca-text.disabled { display: none; }
+        :host(.enabled) .enable { display: none; }
+        .disable { display: none; }
+        :host(.enabled) .disable { display: inline; }
+
+    </style>
+
+    <div class="header">
+        <span><ca-text class="name"></ca-text><ca-text class="level"></ca-text><ca-text class="disabled" data-zh="已停用" data-en="Disabled"></ca-text></span>
+        <span class="income"></span>
+    </div>
+
+    <div class="body">
+        <div class="detail">
+        </div>
+        <div class="operation">
+            <button class="build"><ca-text data-zh="建造" data-en="Build"></ca-text></button>
+            <button class="enable"><ca-text data-zh="启用" data-en="Enable"></ca-text></button>
+            <button class="disable"><ca-text data-zh="停用" data-en="Disable"></ca-text></button>
+            <button class="downgrade"><ca-text data-zh="降级" data-en="Downgrade"></ca-text></button>
+            <button class="upgrade"><ca-text data-zh="升级" data-en="Upgrade"></ca-text></button>
+        </div>
+    </div>
+</template>
+
+<script>
+    customElements.define('ca-building', class extends HTMLElement {
+        constructor() {
+            super()
+            const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
+            this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
+            customElements.upgrade(this)
+        }
+
+        connectedCallback() {
+            for (const [lang, display_name] of Object.entries(this.display_name))
+                this.shadowRoot.querySelector('.header .name').dataset[lang] = display_name
+            this.shadowRoot.querySelector('.header .name').render()
+
+            game.on(`${this.name}.income`, this.income_callback = e => {
+                let str = ''
+                for (const [resource, income] of Object.entries(e.income)) {
+                    const display_name = document.querySelector(`#inventory-item-${resource}`).display_name[game.config.lang] ?? document.querySelector(`#inventory-item-${resource}`).display_name['zh']
+                    str += `${display_name}: ${income} `
+                }
+                this.shadowRoot.querySelector('.header .income').innerHTML = str
+            })
+
+            game.on(`${this.name}.properties`, this.properties_callback = e => {
+                if (e.properties.unlocked !== undefined && e.properties.unlocked[1])
+                    this.classList.add('unlocked')
+
+                if (e.properties.built !== undefined && e.properties.built[1])
+                    this.classList.add('built')
+            
+                if (e.properties.enabled !== undefined)
+                    this.classList.toggle('enabled', e.properties.enabled[1])
+
+                if (e.properties.level !== undefined) {
+                    this.shadowRoot.querySelector('.header .level').dataset.zh = `（${e.properties.level[1]}级）`
+                    this.shadowRoot.querySelector('.header .level').dataset.en = ` (Level ${e.properties.level[1]}) `
+                    this.shadowRoot.querySelector('.header .level').render()
+                }
+
+                game.pool_with_message({event: `${this.name}.detail`})
+            })
+
+            const detail = this.shadowRoot.querySelector('.detail')
+            detail.innerHTML = this.detail[game.config.lang] ?? this.detail['zh']
+            game.on('config.lang', detail.lang_callback = e => {
+                detail.innerHTML = this.detail[e.lang] ?? this.detail['zh']
+            })
+
+            this.shadowRoot.querySelector('.header').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.detail`})
+                this.classList.toggle('expanded')
+            })
+
+            this.shadowRoot.querySelector('button.build').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.build`})
+            })
+
+            this.shadowRoot.querySelector('button.enable').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.enable`})
+            })
+
+            this.shadowRoot.querySelector('button.disable').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.disable`})
+            })
+
+            this.shadowRoot.querySelector('button.downgrade').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.downgrade`})
+            })
+
+            this.shadowRoot.querySelector('button.upgrade').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.upgrade`})
+            })
+        }
+    })
+</script>
+
+
+<template id="template-building-detail-slot">
+    <span></span>
+    <slot style="display: none;"></slot>
+</template>
+
+<script>
+    customElements.define('ca-building-detail-slot', class extends HTMLElement {
+        constructor() {
+            super()
+            const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
+            this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
+            customElements.upgrade(this)
+
+            this.shadowRoot.querySelector('slot').addEventListener('slotchange', e => {
+                const building_name = this.getRootNode().host.name
+                const field_name = e.target.assignedNodes()[0].textContent.trim()
+                game.on(`${building_name}.detail`, this.detail_callback = e => {
+                    if (field_name.includes('.')) {
+                        const [field, resource] = field_name.split('.')
+                        this.shadowRoot.querySelector('span').innerHTML = e[field][resource][0]
+                    } else {
+                        let content = ''
+                        for (const [resource, [amount, sufficient]] of Object.entries(e[field_name])) {
+                            content += `${amount} <ca-resource>${resource}</ca-resource><span style="margin-left: .4em"></span>`
+                        }
+                        if (content === '') {
+                            switch (game.config.lang) {
+                                case 'en':
+                                    content = 'Free'
+                                    break
+                                case 'zh':
+                                default:
+                                    content = '免費'
+                                    break
+                            }
+                        }
+
+                        this.shadowRoot.querySelector('span').innerHTML = content
+                    }
+                })
+            })
+        }
+    })
+</script>
+
+
+
 <ca-card
     id="building-card"
     data-title-zh="建築"
@@ -7,5 +206,14 @@
 </ca-card>
 
 <script type="module">
+    const card = document.querySelector('#building-card')
 
+    game.on('init', card.init = e => {
+        for (const building_def of e.building_defs) {
+            const building = document.createElement('ca-building')
+            Object.assign(building, building_def)
+            building.id = `building-${building_def.name}`
+            document.querySelector('#building-card').append(building)
+        }
+    })
 </script>

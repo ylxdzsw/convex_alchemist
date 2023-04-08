@@ -13,6 +13,12 @@
             game.on('config.lang', this.render = this.render.bind(this))
         }
 
+        set_content(lang_dict) {
+            for (const [lang, content] of Object.entries(lang_dict))
+                this.dataset[lang] = content
+            this.render()
+        }
+
         connectedCallback() {
             this.render()
         }
