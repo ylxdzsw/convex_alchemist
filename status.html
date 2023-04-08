@@ -5,10 +5,19 @@
 >
 <div id="status-speed-control">
     <ca-text id="status-speed-control-day" data-zh="第0天" data-en="Day 0"></ca-text>
-    <button><ca-text data-zh="前进一天" data-en="Step"></ca-text></button>
+    <button id="status-speed-control-step"><ca-text data-zh="前进一天" data-en="Step"></ca-text></button>
 </div>
 </ca-card>
 
 <script type="module">
+    const day = document.querySelector('#status-speed-control-day')
+    const step = document.querySelector('#status-speed-control-step')
 
+    step.addEventListener('click', () => game.step())
+
+    game.on('status', day.update = e => {
+        day.dataset.zh = `第${e.day}天`
+        day.dataset.en = `Day ${e.day}`
+        day.render()
+    })
 </script>

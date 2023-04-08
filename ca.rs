@@ -5,7 +5,7 @@
 #![feature(const_trait_impl)]
 #![feature(const_mut_refs)]
 
-use std::{collections::BTreeMap, fmt::Debug, ops::{Index, IndexMut}, rc::Rc, f64::consts::LN_10};
+use std::{collections::BTreeMap, fmt::Debug, ops::{Index, IndexMut}, rc::Rc, f64::consts::LN_10, borrow::Borrow};
 use indoc::formatdoc;
 use serde_json::{json, Value as JsonValue};
 
@@ -87,9 +87,9 @@ impl ExpNum {
                 if self >= &ExpNum::from_exp(LN_10 * 10.0) || self < &ExpNum::from(0.001) {
                     panic!("out of range: num={}, format={}", self, format);
                 }
-                if self > &ExpNum::from(10.) {
+                if self > &ExpNum::from(10. - 1e-9) {
                     format!("{:.2}", f64::from(*self))
-                } else if self > &ExpNum::from(1.) {
+                } else if self >= &ExpNum::from(1. - 1e-9) {
                     format!("{:.3}", f64::from(*self))
                 } else {
                     format!("{:.4}", f64::from(*self))
@@ -111,12 +111,12 @@ impl ExpNum {
         }
     }
 
-    fn format_with_preference(&self, preference: &[&str], output_type: &str) -> String {
+    fn format_with_preference(&self, preference: &[impl Borrow<str>], output_type: &str) -> String {
         let mut i = 0;
         while i < NUMBER_FORMAT_CUTOFF.len() && self > &NUMBER_FORMAT_CUTOFF[i] {
             i += 1;
         }
-        return self.format(preference[i], output_type);
+        return self.format(preference[i].borrow(), output_type);
     }
 }
 
@@ -746,7 +746,9 @@ impl Game {
     fn post_resources(&mut self) {
         self.post_message_front(json!({
             "event": "resources",
-            "resources": self.resources.iter().enumerate().map(|(i, r)| (game_def!(ResourceId(i)).name.to_string(), r.as_exp())).collect::<BTreeMap<String, f64>>()
+            "resources": self.resources.iter().enumerate().map(|(i, r)| {
+                (game_def!(ResourceId(i)).name.to_string(), r.format_with_preference(&self.format_preference, "html"))
+            }).collect::<BTreeMap<String, String>>()
         }));
     }
 

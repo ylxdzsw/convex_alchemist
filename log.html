@@ -27,7 +27,7 @@
 
     log.textContent = '' // remove the empty line
 
-    log.log = lang_dict => {
+    game.on('log', log.log = lang_dict => {
         let str;
         switch (game.config.lang) {
             case 'zh': str = `第${game.state.day}天：`; break
@@ -35,10 +35,7 @@
         }
 
         str += lang_dict[game.config.lang] ?? lang_dict['zh']
-        console.log(str)
         log.textContent += str + '\n'
         log.scrollTop = log.scrollHeight
-    }
-
-    game.on('log', log.log)
+    })
 </script>

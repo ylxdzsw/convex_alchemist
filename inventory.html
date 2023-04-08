@@ -26,10 +26,10 @@
                 this.shadowRoot.querySelector('.name').dataset[attr.name.slice(18)] = attr.value
             this.shadowRoot.querySelector('.name').render()
 
-            game.on(`resources`, e => {
-                if (e[this.name] === undefined) return
-                this.shadowRoot.querySelector('.amount').innerHTML = e[this.name]
-                this.classList.add('unlocked')
+            game.on(`resources`, this.resource_update_callback = e => {
+                this.shadowRoot.querySelector('.amount').innerHTML = e.resources[this.name]
+                if (e.resources[this.name] != "0") // unlock at the first time it becomes non-0
+                    this.classList.add('unlocked')
             })
         }
     })
