@@ -505,78 +505,87 @@ fn init_game_def() {
         let id = BuildingId(game_def.buildings.len());
         game_def.buildings.push(building);
 
-        game_def.add_handler("step".to_string(), Box::new(move |game, _msg| {
-            if !game[id]["enabled"].as_bool() {
-                return;
-            }
+        game_def.add_handler("step".to_string(), {
+            let cost_fun = cost_fun.clone();
+            let product_fun = product_fun.clone();
 
-            let costs = cost_fun(game);
-
-            for &(resource_id, cost) in &costs {
-                if game[resource_id] < cost {
-                    game[id].insert("enabled".to_string(), BuildingProperty::Bool(false));
-                    game.post_building_properties(id);
-                    game.post_message_front(json!({
-                        "event": "log",
-                        "content": {
-                            "en": format!("{} is automatically disabled due to lack of resources", name),
-                            "zh": format!("{}资源不足，已被自动停用", name)
-                        },
-                    }));
+            Box::new(move |game, _msg| {
+                if !game[id]["enabled"].as_bool() {
                     return;
                 }
-            }
 
-            for (resource_id, cost) in costs {
-                game[resource_id] -= cost;
-            }
+                let costs = cost_fun(game);
 
-            let products = product_fun(game);
-            let mut income_json = serde_json::Map::new(); // due to lifetime issue we have to make it without closure
+                for &(resource_id, cost) in &costs {
+                    if game[resource_id] < cost {
+                        game[id].insert("enabled".to_string(), BuildingProperty::Bool(false));
+                        game.post_building_properties(id);
+                        game.post_message_front(json!({
+                            "event": "log",
+                            "content": {
+                                "en": format!("{} is automatically disabled due to lack of resources", name),
+                                "zh": format!("{}资源不足，已被自动停用", name)
+                            },
+                        }));
+                        return;
+                    }
+                }
 
-            for &(resource_id, amount) in &products {
-                game[resource_id] += amount;
-                income_json.insert(game_def!(resource_id).name.to_string(), json!(amount.format_with_preference(&game.format_preference, "html")));
-            }
+                for (resource_id, cost) in costs {
+                    game[resource_id] -= cost;
+                }
 
-            game.post_message_front(json!({
-                "event": format!("{name}.income"),
-                "income": income_json
-            }))
-        }));
+                let products = product_fun(game);
+                let mut income_json = serde_json::Map::new(); // due to lifetime issue we have to make it without closure
 
-        game_def.add_handler(format!("{name}.build"), Box::new(move |game, _msg| {
-            if !game[id]["unlocked"].as_bool() {
-                return;
-            }
+                for &(resource_id, amount) in &products {
+                    game[resource_id] += amount;
+                    income_json.insert(game_def!(resource_id).name.to_string(), json!(amount.format_with_preference(&game.format_preference, "html")));
+                }
 
-            let costs = build_cost_fun(game);
+                game.post_message_front(json!({
+                    "event": format!("{name}.income"),
+                    "income": income_json
+                }))
+            })
+        });
 
-            for &(resource_id, cost) in &costs {
-                if game[resource_id] < cost {
-                    game.post_message_front(json!({
-                        "event": "log",
-                        "content": {
-                            "en": format!("Not enough {} to build {}", game_def!(resource_id).display_name["en"], name),
-                            "zh": format!("{}不足，无法建造{}", game_def!(resource_id).display_name["zh"], name)
-                        },
-                    }));
+        game_def.add_handler(format!("{name}.build"), {
+            let build_cost_fun = build_cost_fun.clone();
+
+            Box::new(move |game, _msg| {
+                if !game[id]["unlocked"].as_bool() {
                     return;
                 }
-            }
 
-            for (resource_id, cost) in costs {
-                game[resource_id] -= cost;
-            }
+                let costs = build_cost_fun(game);
 
-            game[id].insert("built".to_string(), BuildingProperty::Bool(true));
-            game[id].insert("enabled".to_string(), BuildingProperty::Bool(true));
-            game[id].insert("level".to_string(), BuildingProperty::Int(1));
-            game.post_building_properties(id);
-            game.dispatch_message(json!({
-                "event": format!("{name}.built")
-            }));
-        }));
+                for &(resource_id, cost) in &costs {
+                    if game[resource_id] < cost {
+                        game.post_message_front(json!({
+                            "event": "log",
+                            "content": {
+                                "en": format!("Not enough {} to build {}", game_def!(resource_id).display_name["en"], name),
+                                "zh": format!("{}不足，无法建造{}", game_def!(resource_id).display_name["zh"], name)
+                            },
+                        }));
+                        return;
+                    }
+                }
+
+                for (resource_id, cost) in costs {
+                    game[resource_id] -= cost;
+                }
+
+                game[id].insert("built".to_string(), BuildingProperty::Bool(true));
+                game[id].insert("enabled".to_string(), BuildingProperty::Bool(true));
+                game[id].insert("level".to_string(), BuildingProperty::Int(1));
+                game.post_building_properties(id);
+                game.dispatch_message(json!({
+                    "event": format!("{name}.built")
+                }));
+            })
+        });
 
         game_def.add_handler(format!("{name}.enable"), Box::new(move |game, _msg| {
             if !game[id]["built"].as_bool() {
@@ -596,34 +605,38 @@ fn init_game_def() {
             game.post_building_properties(id);
         }));
 
-        game_def.add_handler(format!("{name}.upgrade"), Box::new(move |game, _msg| {
-            if !game[id]["built"].as_bool() {
-                return;
-            }
+        game_def.add_handler(format!("{name}.upgrade"), {
+            let upgrade_cost_fun = upgrade_cost_fun.clone();
 
-            let costs = upgrade_cost_fun(game);
-
-            for &(resource_id, cost) in &costs {
-                if game[resource_id] < cost {
-                    game.post_message_front(json!({
-                        "event": "log",
-                        "msg": {
-                            "en": format!("Not enough {} to upgrade {}", game_def!(resource_id).display_name["en"], name),
-                            "zh": format!("{}不足，无法升级{}", game_def!(resource_id).display_name["zh"], name)
-                        },
-                    }));
+            Box::new(move |game, _msg| {
+                if !game[id]["built"].as_bool() {
                     return;
                 }
-            }
 
-            for (resource_id, cost) in costs {
-                game[resource_id] -= cost;
-            }
+                let costs = upgrade_cost_fun(game);
 
-            let current_level = game[id]["level"].as_int();
-            game[id].insert("level".to_string(), BuildingProperty::Int(current_level + 1));
-            game.post_building_properties(id);
-        }));
+                for &(resource_id, cost) in &costs {
+                    if game[resource_id] < cost {
+                        game.post_message_front(json!({
+                            "event": "log",
+                            "msg": {
+                                "en": format!("Not enough {} to upgrade {}", game_def!(resource_id).display_name["en"], name),
+                                "zh": format!("{}不足，无法升级{}", game_def!(resource_id).display_name["zh"], name)
+                            },
+                        }));
+                        return;
+                    }
+                }
+
+                for (resource_id, cost) in costs {
+                    game[resource_id] -= cost;
+                }
+
+                let current_level = game[id]["level"].as_int();
+                game[id].insert("level".to_string(), BuildingProperty::Int(current_level + 1));
+                game.post_building_properties(id);
+            })
+        });
 
         game_def.add_handler(format!("{name}.downgrade"), Box::new(move |game, _msg| {
             if !game[id]["built"].as_bool() {
@@ -639,6 +652,52 @@ fn init_game_def() {
             game.post_building_properties(id);
         }));
 
+        game_def.add_handler(format!("{name}.detail"), {
+            let cost_fun = cost_fun.clone();
+            let product_fun = product_fun.clone();
+            let build_cost_fun = build_cost_fun.clone();
+            let upgrade_cost_fun = upgrade_cost_fun.clone();
+
+            Box::new(move |game, _msg| {
+                let mut message = json!({
+                    "event": format!("{name}.detail"),
+                    "cost": {},
+                    "product": {},
+                    "build_cost": {},
+                    "upgrade_cost": {}
+                });
+
+                for (resource_id, amount) in cost_fun(game) {
+                    let name = game_def!(resource_id).name;
+                    let sufficient = game[resource_id] >= amount;
+                    let amount = amount.format_with_preference(&game.format_preference, "html");
+                    message["cost"][name] = json!([amount, sufficient]);
+                }
+
+                for (resource_id, amount) in product_fun(game) {
+                    let name = game_def!(resource_id).name;
+                    let amount = amount.format_with_preference(&game.format_preference, "html");
+                    message["product"][name] = json!([amount, true]);
+                }
+
+                for (resource_id, amount) in build_cost_fun(game) {
+                    let name = game_def!(resource_id).name;
+                    let sufficient = game[resource_id] >= amount;
+                    let amount = amount.format_with_preference(&game.format_preference, "html");
+                    message["build_cost"][name] = json!([amount, sufficient]);
+                }
+
+                for (resource_id, amount) in upgrade_cost_fun(game) {
+                    let name = game_def!(resource_id).name;
+                    let sufficient = game[resource_id] >= amount;
+                    let amount = amount.format_with_preference(&game.format_preference, "html");
+                    message["upgrade_cost"][name] = json!([amount, sufficient]);
+                }
+
+                game.post_message_front(message);
+            })
+        });
+
         id
     }
 
@@ -653,12 +712,18 @@ fn init_game_def() {
         detail: json!({
             "en": formatdoc! {r#"
                 <p>A tent. Generates man power.</p>
-                <p>Products: {man_power} <ca-katex>2 ^ {{\text{{level}} - 1}}</ca-katex> per Day</p>
-            "#, man_power = game_def[resource_man_id].display_name["en"] },
+                <p>
+                <strong style="margin-right: .2rem">Products:</strong> <ca-katex>2 ^ {{\text{{level}} - 1}}</ca-katex> = <ca-building-detail-slot>product.man</ca-building-detail-slot> <ca-resource>man</ca-resource>
+                <span class="upgrade-cost"><br><strong style="margin-right: .2rem">Upgrade Cost:</strong> <ca-building-detail-slot>upgrade_cost</ca-building-detail-slot></span>
+                </p>
+            "#},
             "zh": formatdoc! {r#"
                 <p>一个帐篷。生成人力。</p>
-                <p>产出: {man_power} <ca-katex>2 ^ {{\text{{等级}} - 1}}</ca-katex> 每天</p>
-            "#, man_power = game_def[resource_man_id].display_name["zh"] },
+                <p>
+                <strong style="margin-right: .1rem">产出：</strong><ca-katex>2 ^ {{\text{{\tiny 等级}} - 1}}</ca-katex> = <ca-building-detail-slot>product.man</ca-building-detail-slot> <ca-resource>man</ca-resource>
+                <span class="upgrade-cost"><br><strong style="margin-right: .2rem">升级需求：</strong><ca-building-detail-slot>upgrade_cost</ca-building-detail-slot></span>
+                </p>
+            "#},
         })
     },
     // cost

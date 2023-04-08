@@ -1,0 +1,27 @@
+<template id="template-resource">
+    <span class="icon"></span>
+    <ca-text class="name"></ca-text>
+    <slot style="display: none;"></slot>
+</template>
+
+<script>
+    customElements.define('ca-resource', class extends HTMLElement {
+        constructor() {
+            super()
+            const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
+            this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
+            customElements.upgrade(this)
+
+            this.shadowRoot.querySelector('slot').addEventListener('slotchange', e => {
+                this.render(e.target.assignedNodes()[0].textContent.trim())
+            })
+        }
+
+        render(name) {
+            // TODO: icon
+            this.shadowRoot.querySelector('.icon').remove()
+            const display_name = document.querySelector(`#inventory-item-${name}`).display_name
+            this.shadowRoot.querySelector('.name').set_content(display_name)
+        }
+    })
+</script>

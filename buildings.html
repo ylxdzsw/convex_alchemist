@@ -65,7 +65,7 @@
             game.on(`${this.name}.income`, this.income_callback = e => {
                 let str = ''
                 for (const [resource, income] of Object.entries(e.income)) {
-                    const display_name = document.querySelector(`ca-item[data-name="${resource}"]`).shadowRoot.querySelector("ca-text").shadowRoot.textContent
+                    const display_name = document.querySelector(`#inventory-item-${resource}`).display_name[game.config.lang] ?? document.querySelector(`#inventory-item-${resource}`).display_name['zh']
                     str += `${display_name}: ${income} `
                 }
                 this.shadowRoot.querySelector('.header .income').innerHTML = str
@@ -83,7 +83,42 @@
             })
 
             this.shadowRoot.querySelector('.header').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.detail`})
                 this.classList.toggle('expanded')
+            })
+        }
+    })
+</script>
+
+
+<template id="template-building-detail-slot">
+    <span></span>
+    <slot style="display: none;"></slot>
+</template>
+
+<script>
+    customElements.define('ca-building-detail-slot', class extends HTMLElement {
+        constructor() {
+            super()
+            const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
+            this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
+            customElements.upgrade(this)
+
+            this.shadowRoot.querySelector('slot').addEventListener('slotchange', e => {
+                const building_name = this.getRootNode().host.name
+                const field_name = e.target.assignedNodes()[0].textContent.trim()
+                game.on(`${building_name}.detail`, this.detail_callback = e => {
+                    if (field_name.includes('.')) {
+                        const [field, resource] = field_name.split('.')
+                        this.shadowRoot.querySelector('span').innerHTML = e[field][resource][0]
+                    } else {
+                        let content = ''
+                        for (const [resource, [amount, sufficient]] of Object.entries(e[field_name])) {
+                            content += `${amount} <ca-resource>${resource}</ca-resource><span style="width: 1rem"></span>`
+                        }
+                        this.shadowRoot.querySelector('span').innerHTML = content
+                    }
+                })
             })
         }
     })
@@ -100,7 +135,9 @@
 </ca-card>
 
 <script type="module">
-    game.on('init', e => {
+    const card = document.querySelector('#building-card')
+
+    game.on('init', card.init = e => {
         for (const building_def of e.building_defs) {
             const building = document.createElement('ca-building')
             Object.assign(building, building_def)

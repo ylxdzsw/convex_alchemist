@@ -30,6 +30,7 @@
     const container = document.querySelector('#log-container')
 
     game.on('log', container.log = e => {
+        // a bit hacky
         const date = document.querySelector('#status-speed-control-day').shadowRoot.textContent.trim()
         const content = e.content[game.config.lang] ?? e.content['zh']
         const el = document.createElement("p")

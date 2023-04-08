@@ -109,6 +109,8 @@ const game = {
 
     step() {
         game.pool_with_message({event: 'step'})
+        for (const building of document.querySelectorAll('ca-building.expanded'))
+            game.pool_with_message({event: `${building}.detail`})
     },
 
     init_game() {
@@ -123,7 +125,7 @@ const game = {
             zh: `游戏初始化完成。点击“前进一天”推动游戏进程。点击建筑名称打开详情页。`,
             en: `Game initialized. Click "step" to advance the game. Click building name to open details.`,
         })
-    }
+    },
 }
 
 addEventListener("DOMContentLoaded", async () => {
