@@ -110,7 +110,7 @@ const game = {
     step() {
         game.pool_with_message({event: 'step'})
         for (const building of document.querySelectorAll('ca-building.expanded'))
-            game.pool_with_message({event: `${building}.detail`})
+            game.pool_with_message({event: `${building.name}.detail`})
     },
 
     init_game() {

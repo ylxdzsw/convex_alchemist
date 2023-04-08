@@ -524,7 +524,7 @@ fn init_game_def() {
                             "event": "log",
                             "content": {
                                 "en": format!("{} is automatically disabled due to lack of resources", name),
-                                "zh": format!("{}资源不足，已被自动停用", name)
+                                "zh": format!("{}资源不足，已自动停用", name)
                             },
                         }));
                         return;
@@ -565,8 +565,8 @@ fn init_game_def() {
                         game.post_message_front(json!({
                             "event": "log",
                             "content": {
-                                "en": format!("Not enough {} to build {}", game_def!(resource_id).display_name["en"], name),
-                                "zh": format!("{}不足，无法建造{}", game_def!(resource_id).display_name["zh"], name)
+                                "en": format!("Not enough {} to build {}", game_def!(resource_id).display_name["en"].as_str().unwrap(), name),
+                                "zh": format!("{}不足，无法建造{}", game_def!(resource_id).display_name["zh"].as_str().unwrap(), name)
                             },
                         }));
                         return;
@@ -619,9 +619,9 @@ fn init_game_def() {
                     if game[resource_id] < cost {
                         game.post_message_front(json!({
                             "event": "log",
-                            "msg": {
-                                "en": format!("Not enough {} to upgrade {}", game_def!(resource_id).display_name["en"], name),
-                                "zh": format!("{}不足，无法升级{}", game_def!(resource_id).display_name["zh"], name)
+                            "content": {
+                                "en": format!("Not enough {} to upgrade {}", game_def!(resource_id).display_name["en"].as_str().unwrap(), name),
+                                "zh": format!("{}不足，无法升级{}", game_def!(resource_id).display_name["zh"].as_str().unwrap(), name)
                             },
                         }));
                         return;
@@ -713,15 +713,17 @@ fn init_game_def() {
             "en": formatdoc! {r#"
                 <p>A tent. Generates man power.</p>
                 <p>
-                <strong style="margin-right: .2rem">Products:</strong> <ca-katex>2 ^ {{\text{{level}} - 1}}</ca-katex> = <ca-building-detail-slot>product.man</ca-building-detail-slot> <ca-resource>man</ca-resource>
-                <span class="upgrade-cost"><br><strong style="margin-right: .2rem">Upgrade Cost:</strong> <ca-building-detail-slot>upgrade_cost</ca-building-detail-slot></span>
+                <span class="product"><strong style="margin-right: .2rem">Products:</strong> <ca-katex>2 ^ {{\text{{level}} - 1}}</ca-katex> = <ca-building-detail-slot>product.man</ca-building-detail-slot> <ca-resource>man</ca-resource><br></span>
+                <span class="upgrade-cost"><strong style="margin-right: .2rem">Upgrade Cost:</strong> <ca-building-detail-slot>upgrade_cost</ca-building-detail-slot><br></span>
+                <span class="build-cost"><strong style="margin-right: .2rem">Build Cost:</strong> <ca-building-detail-slot>build_cost</ca-building-detail-slot><br></span>
                 </p>
             "#},
             "zh": formatdoc! {r#"
                 <p>一个帐篷。生成人力。</p>
                 <p>
-                <strong style="margin-right: .1rem">产出：</strong><ca-katex>2 ^ {{\text{{\tiny 等级}} - 1}}</ca-katex> = <ca-building-detail-slot>product.man</ca-building-detail-slot> <ca-resource>man</ca-resource>
-                <span class="upgrade-cost"><br><strong style="margin-right: .2rem">升级需求：</strong><ca-building-detail-slot>upgrade_cost</ca-building-detail-slot></span>
+                <span class="product"><strong style="margin-right: .1rem">产出：</strong><ca-katex>2 ^ {{\text{{\tiny 等级}} - 1}}</ca-katex> = <ca-building-detail-slot>product.man</ca-building-detail-slot> <ca-resource>man</ca-resource><br></span>
+                <span class="upgrade-cost"><strong style="margin-right: .2rem">升级需求：</strong><ca-building-detail-slot>upgrade_cost</ca-building-detail-slot><br></span>
+                <span class="build-cost"><strong style="margin-right: .2rem">建造需求：</strong><ca-building-detail-slot>build_cost</ca-building-detail-slot><br></span>
                 </p>
             "#},
         })

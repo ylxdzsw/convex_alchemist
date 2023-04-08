@@ -30,12 +30,33 @@
             display: flex;
             justify-content: space-around;
             align-items: center;
-            height: 2rem;
+            margin-bottom: .4rem;
         }
+
+        .build-cost { display: inline; }
+        :host(.built) .build-cost { display: none; }
+
+        .cost { display: none; }
+        :host(.built) .cost { display: inline; }
+
+        .product { display: none; }
+        :host(.built) .product { display: inline; }
+
+        .upgrade-cost { display: none; }
+        :host(.built) .upgrade-cost { display: inline; }
+
+        :host(.built) .build { display: none; }
+
+        ca-text.disabled { color: #bbb; }
+        :host(.enabled) ca-text.disabled { display: none; }
+        :host(.enabled) .enable { display: none; }
+        .disable { display: none; }
+        :host(.enabled) .disable { display: inline; }
+
     </style>
 
     <div class="header">
-        <ca-text class="name"></ca-text>
+        <span><ca-text class="name"></ca-text><ca-text class="level"></ca-text><ca-text class="disabled" data-zh="已停用" data-en="Disabled"></ca-text></span>
         <span class="income"></span>
     </div>
 
@@ -43,7 +64,11 @@
         <div class="detail">
         </div>
         <div class="operation">
-            <button></button>
+            <button class="build"><ca-text data-zh="建造" data-en="Build"></ca-text></button>
+            <button class="enable"><ca-text data-zh="启用" data-en="Enable"></ca-text></button>
+            <button class="disable"><ca-text data-zh="停用" data-en="Disable"></ca-text></button>
+            <button class="downgrade"><ca-text data-zh="降级" data-en="Downgrade"></ca-text></button>
+            <button class="upgrade"><ca-text data-zh="升级" data-en="Upgrade"></ca-text></button>
         </div>
     </div>
 </template>
@@ -74,6 +99,20 @@
             game.on(`${this.name}.properties`, this.properties_callback = e => {
                 if (e.properties.unlocked !== undefined && e.properties.unlocked[1])
                     this.classList.add('unlocked')
+
+                if (e.properties.built !== undefined && e.properties.built[1])
+                    this.classList.add('built')
+            
+                if (e.properties.enabled !== undefined)
+                    this.classList.toggle('enabled', e.properties.enabled[1])
+
+                if (e.properties.level !== undefined) {
+                    this.shadowRoot.querySelector('.header .level').dataset.zh = `（${e.properties.level[1]}级）`
+                    this.shadowRoot.querySelector('.header .level').dataset.en = ` (Level ${e.properties.level[1]}) `
+                    this.shadowRoot.querySelector('.header .level').render()
+                }
+
+                game.pool_with_message({event: `${this.name}.detail`})
             })
 
             const detail = this.shadowRoot.querySelector('.detail')
@@ -85,6 +124,26 @@
             this.shadowRoot.querySelector('.header').addEventListener('click', e => {
                 game.pool_with_message({event: `${this.name}.detail`})
                 this.classList.toggle('expanded')
+            })
+
+            this.shadowRoot.querySelector('button.build').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.build`})
+            })
+
+            this.shadowRoot.querySelector('button.enable').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.enable`})
+            })
+
+            this.shadowRoot.querySelector('button.disable').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.disable`})
+            })
+
+            this.shadowRoot.querySelector('button.downgrade').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.downgrade`})
+            })
+
+            this.shadowRoot.querySelector('button.upgrade').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.upgrade`})
             })
         }
     })
@@ -114,8 +173,20 @@
                     } else {
                         let content = ''
                         for (const [resource, [amount, sufficient]] of Object.entries(e[field_name])) {
-                            content += `${amount} <ca-resource>${resource}</ca-resource><span style="width: 1rem"></span>`
+                            content += `${amount} <ca-resource>${resource}</ca-resource><span style="margin-left: .4em"></span>`
                         }
+                        if (content === '') {
+                            switch (game.config.lang) {
+                                case 'en':
+                                    content = 'Free'
+                                    break
+                                case 'zh':
+                                default:
+                                    content = '免費'
+                                    break
+                            }
+                        }
+
                         this.shadowRoot.querySelector('span').innerHTML = content
                     }
                 })
