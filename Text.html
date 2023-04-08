@@ -23,7 +23,7 @@
             this.render()
         }
 
-        render(lang = game.config.lang) {
+        render(lang = game.lang) {
             this.shadowRoot.querySelector('span').textContent = this.dataset[lang] || this.dataset.zh
         }
     })

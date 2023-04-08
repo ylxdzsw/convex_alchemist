@@ -523,8 +523,8 @@ fn init_game_def() {
                         game.post_message_front(json!({
                             "event": "log",
                             "content": {
-                                "en": format!("{} is automatically disabled due to lack of resources", name),
-                                "zh": format!("{}资源不足，已自动停用", name)
+                                "en": format!("{} is automatically disabled due to lack of resources", game_def!(id).display_name["en"].as_str().unwrap()),
+                                "zh": format!("{}资源不足，已自动停用", game_def!(id).display_name["zh"].as_str().unwrap())
                             },
                         }));
                         return;
@@ -565,8 +565,8 @@ fn init_game_def() {
                         game.post_message_front(json!({
                             "event": "log",
                             "content": {
-                                "en": format!("Not enough {} to build {}", game_def!(resource_id).display_name["en"].as_str().unwrap(), name),
-                                "zh": format!("{}不足，无法建造{}", game_def!(resource_id).display_name["zh"].as_str().unwrap(), name)
+                                "en": format!("Not enough {} to build {}", game_def!(resource_id).display_name["en"].as_str().unwrap(), game_def!(id).display_name["en"].as_str().unwrap()),
+                                "zh": format!("{}不足，无法建造{}", game_def!(resource_id).display_name["zh"].as_str().unwrap(), game_def!(id).display_name["zh"].as_str().unwrap())
                             },
                         }));
                         return;
@@ -620,8 +620,8 @@ fn init_game_def() {
                         game.post_message_front(json!({
                             "event": "log",
                             "content": {
-                                "en": format!("Not enough {} to upgrade {}", game_def!(resource_id).display_name["en"].as_str().unwrap(), name),
-                                "zh": format!("{}不足，无法升级{}", game_def!(resource_id).display_name["zh"].as_str().unwrap(), name)
+                                "en": format!("Not enough {} to upgrade {}", game_def!(resource_id).display_name["en"].as_str().unwrap(), game_def!(id).display_name["en"].as_str().unwrap()),
+                                "zh": format!("{}不足，无法升级{}", game_def!(resource_id).display_name["zh"].as_str().unwrap(), game_def!(id).display_name["zh"].as_str().unwrap())
                             },
                         }));
                         return;
