@@ -285,6 +285,23 @@ fn init_game_def() {
         game.day += 1
     }));
 
+    game_def.add_handler("init", Box::new(move |game| {
+        game.post_message_front(json!({
+            "event": "init",
+    
+            "resources": game_def!().resources.iter().map(|r| json!({
+                "name": r.name,
+                "display_name": r.display_name,
+            })).collect::<Vec<_>>(),
+    
+            "buildings": game_def!().buildings.iter().map(|b| json!({
+                "name": b.name,
+                "display_name": b.display_name,
+                "detail": b.detail
+            })).collect::<Vec<_>>(),
+        }))
+    }));
+
     let resource_man_id = ResourceId(game_def.resources.len());
     game_def.resources.push(Resource {
         name: "man",
@@ -381,13 +398,12 @@ fn init_game_def() {
             for &(resource_id, cost) in &costs {
                 if game[resource_id] < cost {
                     game[id].insert("enabled".to_string(), BuildingProperty::Bool(false));
-                    game.post_update(json!({
-                        "event": "building_update",
-                        "building": name,
+                    game.post_message_front(json!({
+                        "event": format!("{name}.update")
                     }));
-                    game.post_update(json!({
+                    game.post_message_front(json!({
                         "event": "log",
-                        "msg": {
+                        "content": {
                             "en": format!("{} is automatically disabled due to lack of resources", name),
                             "zh": format!("{}资源不足，已被自动停用", name)
                         },
@@ -408,8 +424,8 @@ fn init_game_def() {
                 income_json.insert(game_def!(resource_id).name.to_string(), json!(amount.as_exp()));
             }
 
-            game.post_update(json!({
-                "building": name,
+            game.post_message_front(json!({
+                "event": format!("{name}.update"),
                 "income": income_json
             }))
         }));
@@ -423,9 +439,9 @@ fn init_game_def() {
 
             for &(resource_id, cost) in &costs {
                 if game[resource_id] < cost {
-                    game.post_update(json!({
+                    game.post_message_front(json!({
                         "event": "log",
-                        "msg": {
+                        "content": {
                             "en": format!("Not enough {} to build {}", game_def!(resource_id).display_name["en"], name),
                             "zh": format!("{}不足，无法建造{}", game_def!(resource_id).display_name["zh"], name)
                         },
@@ -441,11 +457,10 @@ fn init_game_def() {
             game[id].insert("built".to_string(), BuildingProperty::Bool(true));
             game[id].insert("enabled".to_string(), BuildingProperty::Bool(true));
             game[id].insert("level".to_string(), BuildingProperty::Int(1));
-            game.post_update(json!({
-                "event": "building_update",
-                "building": name,
+            game.post_message_front(json!({
+                "event": format!("{name}.update")
             }));
-            game.handle_event(json!({
+            game.dispatch_message(json!({
                 "event": format!("{name}.built")
             }));
         }));
@@ -456,9 +471,8 @@ fn init_game_def() {
             }
 
             game[id].insert("enabled".to_string(), BuildingProperty::Bool(true));
-            game.post_update(json!({
-                "event": "building_update",
-                "building": name,
+            game.post_message_front(json!({
+                "event": format!("{name}.update")
             }));
         }));
 
@@ -468,9 +482,8 @@ fn init_game_def() {
             }
 
             game[id].insert("enabled".to_string(), BuildingProperty::Bool(false));
-            game.post_update(json!({
-                "event": "building_update",
-                "building": name,
+            game.post_message_front(json!({
+                "event": format!("{name}.update")
             }));
         }));
 
@@ -483,7 +496,7 @@ fn init_game_def() {
 
             for &(resource_id, cost) in &costs {
                 if game[resource_id] < cost {
-                    game.post_update(json!({
+                    game.post_message_front(json!({
                         "event": "log",
                         "msg": {
                             "en": format!("Not enough {} to upgrade {}", game_def!(resource_id).display_name["en"], name),
@@ -500,9 +513,8 @@ fn init_game_def() {
 
             let current_level = game[id]["level"].as_int();
             game[id].insert("level".to_string(), BuildingProperty::Int(current_level + 1));
-            game.post_update(json!({
-                "event": "building_update",
-                "building": name,
+            game.post_message_front(json!({
+                "event": format!("{name}.update")
             }));
         }));
 
@@ -517,9 +529,8 @@ fn init_game_def() {
             }
 
             game[id].insert("level".to_string(), BuildingProperty::Int(current_level - 1));
-            game.post_update(json!({
-                "event": "building_update",
-                "building": name,
+            game.post_message_front(json!({
+                "event": format!("{name}.update")
             }));
         }));
 
@@ -588,7 +599,7 @@ struct Game {
     resources: Vec<ExpNum>,
     buildings: Vec<BTreeMap<String, BuildingProperty>>,
 
-    updates: Vec<JsonValue>,
+    message_queue: Vec<JsonValue>,
 }
 
 impl Game {
@@ -598,7 +609,7 @@ impl Game {
             day: 0,
             resources: game_def!().resources.iter().map(|_| ExpNum::from(0.)).collect(),
             buildings: game_def!().buildings.iter().map(|_| BTreeMap::new()).collect(),
-            updates: vec![]
+            message_queue: vec![]
         }
     }
 
@@ -613,11 +624,11 @@ impl Game {
         (self.get_random_u32() % 1000000) as f64 / 1000000.
     }
 
-    fn post_update(&mut self, message: JsonValue) {
-        self.updates.push(message);
+    fn post_message_front(&mut self, message: JsonValue) {
+        self.message_queue.push(message);
     }
 
-    fn handle_event(&mut self, message: JsonValue) -> Option<()> {
+    fn dispatch_message(&mut self, message: JsonValue) -> Option<()> {
         let event = message["event"].as_str()?;
 
         let handler = game_def!().handlers.get(event)?;
@@ -625,6 +636,27 @@ impl Game {
             h(self);
         }
         Some(())
+    }
+
+    fn post_status(&mut self) {
+        self.post_message_front(json!({
+            "event": "status",
+            "day": self.day
+        }));
+    }
+
+    fn post_resources(&mut self) {
+        self.post_message_front(json!({
+            "event": "resources",
+            "resources": self.resources.iter().enumerate().map(|(i, r)| (game_def!(ResourceId(i)).name.to_string(), r.as_exp())).collect::<BTreeMap<String, f64>>()
+        }));
+    }
+
+    fn post_bug(&mut self, error: &str) {
+        self.post_message_front(json!({
+            "event": "bug",
+            "content": error
+        }));
     }
 }
 
@@ -692,23 +724,7 @@ unsafe extern fn game_new(rand_seed: u32) -> *mut Game {
         init_game_def()
     }
 
-    let mut game = Box::new(Game::new(rand_seed));
-    game.handle_event(json!({ "event": "init" }));
-
-    write_json_buffer(json!({
-        "resources": game_def!().resources.iter().map(|r| json!({
-            "name": r.name,
-            "display_name": r.display_name,
-        })).collect::<Vec<_>>(),
-
-        "buildings": game_def!().buildings.iter().map(|b| json!({
-            "name": b.name,
-            "display_name": b.display_name,
-            "detail": b.detail
-        })).collect::<Vec<_>>(),
-    }));
-
-    Box::into_raw(game)
+    Box::into_raw(Box::new(Game::new(rand_seed)))
 }
 
 #[no_mangle]
@@ -717,26 +733,18 @@ unsafe extern fn game_free(game: *mut Game) {
 }
 
 #[no_mangle]
-unsafe extern fn handle_event(game: *mut Game) {
+unsafe extern fn poll(game: *mut Game) {
     let game = &mut *game;
 
     if let Ok(event) = read_json_buffer() {
-        game.handle_event(event);
-        game.post_update(json!({
-            "event": "resources",
-            "resources": game.resources.iter().enumerate().map(|(i, r)| (game_def!(ResourceId(i)).name.to_string(), r.as_exp())).collect::<BTreeMap<String, f64>>()
-        }));
-        game.post_update(json!({
-            "event": "status",
-            "day": game.day,
-        }));
-
-        write_json_buffer(JsonValue::Array(std::mem::take(&mut game.updates)));
+        game.dispatch_message(event);
+        game.post_status();
+        game.post_resources();
     } else {
-        write_json_buffer(json!({
-            "error": "parsing message failed"
-        }));
+        game.post_bug("failed to parse json");
     }
+
+    write_json_buffer(json!(std::mem::take(&mut game.message_queue)));
 }
 
 #[cfg(test)]
@@ -747,9 +755,9 @@ mod test_game {
     fn test_1() {
         init_game_def();
         let mut game = Game::new(0);
-        game.handle_event(json!({ "event": "init" }));
+        game.dispatch_message(json!({ "event": "init" }));
         eprintln!("{:?}", game.resources);
-        game.handle_event(json!({ "event": "step" }));
+        game.dispatch_message(json!({ "event": "step" }));
         eprintln!("{:?}", game.resources);
     }
 }
