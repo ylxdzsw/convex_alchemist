@@ -15,38 +15,12 @@ function read_user_language() {
     }
 }
 
-// function html_to_element(html) {
-//     const container = document.createElement('template')
-//     container.innerHTML = html.trim()
-//     return container.content.firstChild
-// }
-
 const game = {
     handlers: Object.create(null),
 
     ptr: null,
 
-    // move as much as possible to wasm and flatten this object
-    // lang should be kept front-end since there are text exlusive on the front end
-    config: (() => {
-        const init = {
-            'lang': read_user_language(),
-        }
-
-        const config = Object.create(null)
-        for (const [name, value] of Object.entries(init)) {
-            config['_'+name] = value
-            Object.defineProperty(config, name, {
-                get() { return this['_'+name] },
-                set(value) {
-                    this['_'+name] = value
-                    game.dispatch_message('config.'+name, value)
-                }
-            })
-        }
-
-        return config
-    })(),
+    lang: read_user_language(),
 
     on(event, callback) {
         game.handlers[event] ??= [] // WeakSet is not iterable

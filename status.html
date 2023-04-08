@@ -4,20 +4,91 @@
     data-title-en="Status"
 >
 <div id="status-speed-control">
-    <ca-text id="status-speed-control-day" data-zh="第0天" data-en="Day 0"></ca-text>
-    <button id="status-speed-control-step"><ca-text data-zh="前进一天" data-en="Step"></ca-text></button>
+    <div>
+        <ca-text id="status-speed-control-day" data-zh="第0天" data-en="Day 0"></ca-text>
+        <button id="status-speed-control-step"><ca-text data-zh="前进一天" data-en="Step"></ca-text></button>
+    </div>
+    <div class="hidden">
+        <ca-text data-zh="速度" data-en="Speed"></ca-text>
+        <input id="status-speed-control-speed" type="number" min="1" max="10" step="1" value="2"></input>
+        <ca-text data-zh="天/秒" data-en="Day/s"></ca-text>
+        <button id="status-speed-control-play-pause">⏯</button>
+    </div>
 </div>
 </ca-card>
 
+<style>
+    #status-speed-control {
+        display: flex;
+        gap: 1rem;
+        justify-content: space-between;
+    }
+    #status-speed-control-speed {
+        width: 3rem;
+    }
+    #status-speed-control .hidden {
+        display: none;
+    }
+</style>
+
 <script type="module">
     const day = document.querySelector('#status-speed-control-day')
-    const step = document.querySelector('#status-speed-control-step')
 
-    step.addEventListener('click', () => game.step())
+    let status = 'paused' // 'playing', 'paused', 'to_pause'
+    let last_time = 0 // in miliseconds timestamp
+
+    function auto_play() {
+        switch (status) {
+            case 'playing':
+                last_time = Date.now()
+                game.step()
+                break
+            case 'paused':
+                throw new Error('bug')
+            case 'to_pause':
+                status = 'paused'
+                return
+        }
+
+        let speed = parseInt(document.querySelector('#status-speed-control-speed').value)
+        if (isNaN(speed)) speed = 2
+        if (speed < 1) speed = 1
+        if (speed > 10) speed = 10
+
+        const expected_time_delta = 1000 / speed
+
+        const delta = last_time + expected_time_delta - Date.now()
+        if (delta < 4) delta = 4
+
+        setTimeout(auto_play, delta)
+    }
+
+    document.querySelector('#status-speed-control-step').addEventListener('click', () => {
+        game.step()
+        if (status === 'playing')
+            status = 'to_pause'
+    })
+
+    document.querySelector('#status-speed-control-play-pause').addEventListener('click', () => {
+        switch (status) {
+            case 'playing':
+                status = 'to_pause'
+                break
+            case 'paused':
+                status = 'playing'
+                auto_play()
+                break
+            case 'to_pause':
+                status = 'playing'
+                break
+        }
+    })
 
     game.on('status', day.update = e => {
         day.dataset.zh = `第${e.day}天`
         day.dataset.en = `Day ${e.day}`
         day.render()
+        if (e.day >= 10)
+            document.querySelector('#status-speed-control .hidden')?.classList.remove('hidden')
     })
 </script>

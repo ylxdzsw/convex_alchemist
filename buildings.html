@@ -90,7 +90,7 @@
             game.on(`${this.name}.income`, this.income_callback = e => {
                 let str = ''
                 for (const [resource, income] of Object.entries(e.income)) {
-                    const display_name = document.querySelector(`#inventory-item-${resource}`).display_name[game.config.lang] ?? document.querySelector(`#inventory-item-${resource}`).display_name['zh']
+                    const display_name = document.querySelector(`#inventory-item-${resource}`).display_name[game.lang] ?? document.querySelector(`#inventory-item-${resource}`).display_name['zh']
                     str += `${display_name}: ${income} `
                 }
                 this.shadowRoot.querySelector('.header .income').innerHTML = str
@@ -112,11 +112,12 @@
                     this.shadowRoot.querySelector('.header .level').render()
                 }
 
-                game.pool_with_message({event: `${this.name}.detail`})
+                if (this.classList.contains('expanded'))
+                    game.pool_with_message({event: `${this.name}.detail`})
             })
 
             const detail = this.shadowRoot.querySelector('.detail')
-            detail.innerHTML = this.detail[game.config.lang] ?? this.detail['zh']
+            detail.innerHTML = this.detail[game.lang] ?? this.detail['zh']
             game.on('config.lang', detail.lang_callback = e => {
                 detail.innerHTML = this.detail[e.lang] ?? this.detail['zh']
             })
@@ -176,7 +177,7 @@
                             content += `${amount} <ca-resource>${resource}</ca-resource><span style="margin-left: .4em"></span>`
                         }
                         if (content === '') {
-                            switch (game.config.lang) {
+                            switch (game.lang) {
                                 case 'en':
                                     content = 'Free'
                                     break
