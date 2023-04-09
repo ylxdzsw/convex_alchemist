@@ -24,12 +24,12 @@
                 this.shadowRoot.querySelector('span').setAttribute('style', this.getAttribute(`data-style-${lang}`))
         }
 
-        static get observedAttributes() {
-            return ['data-en']
+        static get observedAttributes() { // how to catch all?
+            return ['data-en', 'data-zh']
         }
 
         attributeChangedCallback(name, oldValue, newValue) {
-            setTimeout(() => this.render(), 0)
+            this.render()
         }
     })
 </script>
