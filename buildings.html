@@ -56,28 +56,34 @@
 
         .upgrade-cost { display: none; }
         :host(.built) .upgrade-cost { display: flex; }
+        :host(.built.max-level) .upgrade-cost { display: none; }
 
         .build-cost { display: flex; }
         :host(.built) .build-cost { display: none; }
 
         :host(.built) .build { display: none; }
 
-        :host(.enabled) .enable { display: none; }
+        .enable { display: none; }
+        :host(.built) .enable { display: inline; }
+        :host(.built.enabled) .enable { display: none; }
 
         .disable { display: none; }
         :host(.enabled) .disable { display: inline; }
 
-        ca-text.disabled { color: #bbb; }
-        :host(.enabled) ca-text.disabled { display: none; }
+        ca-text.disabled { color: #bbb; display: none; }
+        :host(.built) ca-text.disabled { display: inline; }
+        :host(.built.enabled) ca-text.disabled { display: none; }
 
         .downgrade { display: none; }
         :host(.built) .downgrade { display: inline; }
 
         .upgrade { display: none; }
         :host(.built) .upgrade { display: inline; }
+        :host(.built.max-level) .upgrade { display: none; }
 
         .devupgrade { display: none; }
         :host(.built.devmode) .devupgrade { display: inline; }
+        :host(.built.devmode.max-level) .devupgrade { display: none; }
     </style>
 
     <div class="header">
@@ -122,7 +128,7 @@
                 let str = ''
                 for (const [resource, income] of Object.entries(e.income)) {
                     const display_name = document.querySelector(`#inventory-item-${resource}`).display_name[game.lang] ?? document.querySelector(`#inventory-item-${resource}`).display_name['zh']
-                    str += `${display_name}: ${income} `
+                    str += `<span style="margin-left: .2rem"></span> ${income} ${display_name}`
                 }
                 this.shadowRoot.querySelector('.header .income').innerHTML = str
             })
@@ -141,6 +147,8 @@
                     this.shadowRoot.querySelector('.header .level').dataset.zh = `（${e.properties.level[1]}级）`
                     this.shadowRoot.querySelector('.header .level').dataset.en = ` (Level ${e.properties.level[1]}) `
                     this.shadowRoot.querySelector('.header .level').render()
+
+                    this.classList.toggle('max-level', e.properties.level[1] >= this.max_level ?? Infinity)
                 }
 
                 if (this.classList.contains('expanded'))
@@ -213,10 +221,10 @@
                 game.on(`${building_name}.detail`, this.detail_callback = e => {
                     if (field_name.includes('.')) {
                         const [field, resource] = field_name.split('.')
-                        this.shadowRoot.querySelector('span').innerHTML = e[field][resource][0]
+                        this.shadowRoot.querySelector('span').innerHTML = e[field]?.[resource]?.[0]
                     } else {
                         let content = ''
-                        for (const [resource, [amount, sufficient]] of Object.entries(e[field_name])) {
+                        for (const [resource, [amount, sufficient]] of Object.entries(e[field_name] ?? {})) {
                             if (content != '') content += '<br>'
                             content += `${amount} <ca-resource>${resource}</ca-resource>`
                         }

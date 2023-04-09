@@ -120,11 +120,8 @@ addEventListener("DOMContentLoaded", async () => {
 
     game.init_game()
 
-    document.querySelector('#bottom-notice').addEventListener('click', function () {
-        this.counter = (this.counter ?? 0) + 1
-        if (this.counter >= 5)
-            game.dispatch_message({ event: 'config.devmode' })
-    })
+    if (/devmode/.test(location.search))
+        game.dispatch_message({ event: 'config.devmode' })
 })
 
 /*
