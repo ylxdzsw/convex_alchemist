@@ -836,8 +836,8 @@ fn init_game_def() {
     Rc::new(move |game| {
         let level = game[building_forest_id]["level"].as_int();
         vec![
-            (resource_water_id, ExpNum::from(2.2).pow(level)),
-            (resource_earth_id, ExpNum::from(2.).pow(level - 1)),
+            (resource_water_id, ExpNum::from(2.2).pow(level + 8)),
+            (resource_earth_id, ExpNum::from(2.).pow(level + 10)),
         ]
     }),
     // build cost
@@ -854,6 +854,71 @@ fn init_game_def() {
             game[building_forest_id].insert("enabled".to_string(), BuildingProperty::Bool(true));
             game[building_forest_id].insert("level".to_string(), BuildingProperty::Int(1));
             game.post_building_properties(building_forest_id);
+        }
+    }));
+
+
+    let building_swamp_id = BuildingId(game_def.buildings.len());
+    add_building(game_def, Building {
+        name: "swamp",
+        display_name: json!({
+            "en": "Swamp",
+            "zh": "沼泽",
+        }),
+        detail: json!({
+            "description": {
+                "en": r#"Generates <ca-resource>water</ca-resource> and <ca-resource>earth</ca-resource> based on thier ratio."#,
+                "zh": r#"根据<ca-resource>water</ca-resource>和<ca-resource>earth</ca-resource>的比例生成<ca-resource>water</ca-resource>和<ca-resource>earth</ca-resource>。"#,
+            },
+            "cost": {
+                "en": r#""#,
+                "zh": r#""#,
+            },
+            "product": {
+                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} \times \frac{{\text{{Water}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 10}} \times \frac{{\text{{Earth}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+                "zh": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} \times \frac{{\text{{水}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 10}} \times \frac{{\text{{土}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+            }
+        })
+    },
+    // cost
+    Rc::new(move |_| vec![]),
+    // product
+    Rc::new(move |game| {
+        let level = game[building_swamp_id]["level"].as_int();
+        let water = game[resource_water_id];
+        let earth = game[resource_earth_id];
+        
+        let coeff = ExpNum::from(2.).pow(level + 10);
+
+        let water_production = coeff * (water + ExpNum::from(1.)) / (water + earth + ExpNum::from(1.));
+        let earth_production = coeff * (earth + ExpNum::from(1.)) / (water + earth + ExpNum::from(1.));
+        vec![
+            (resource_water_id, water_production),
+            (resource_earth_id, earth_production)
+        ]
+    }),
+    // upgrade cost
+    Rc::new(move |game| {
+        let level = game[building_swamp_id]["level"].as_int();
+        vec![
+            (resource_water_id, ExpNum::from(2.2).pow(level+8)),
+            (resource_earth_id, ExpNum::from(2.2).pow(level+8)),
+        ]
+    }),
+    // build cost
+    Rc::new(move |_| vec![]));
+
+    game_def.add_handler("tent.upgraded", Box::new(move |game, _msg| {
+        if game[building_swamp_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+            return;
+        }
+        let tent_level = game[building_tent_id]["level"].as_int();
+        if tent_level >= 5 {
+            game[building_swamp_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+            game[building_swamp_id].insert("built".to_string(), BuildingProperty::Bool(true));
+            game[building_swamp_id].insert("enabled".to_string(), BuildingProperty::Bool(true));
+            game[building_swamp_id].insert("level".to_string(), BuildingProperty::Int(1));
+            game.post_building_properties(building_swamp_id);
         }
     }));
 
