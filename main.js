@@ -145,7 +145,9 @@ const game = {
         if (game.ptr) ca.game_free(game.ptr)
         game.ptr = ca.game_new()
         game.write_wasm_json(data_str, false)
+        const time = Date.now()
         ca.game_load(game.ptr)
+        console.info("load time", Date.now() - time)
         game.dispatch_message({ event: 'reset' })
         game.process_back_message()
     },
