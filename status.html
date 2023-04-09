@@ -41,7 +41,7 @@
     #status-timewarp-target {
         width: 3rem;
     }
-    #status-timewarp-panel.expanded.unlocked {
+    #status-timewarp-panel.expanded {
         display: block;
     }
 </style>
@@ -118,7 +118,5 @@
         day.render()
         if (e.day >= 10)
             document.querySelector('#status-speed-control .hidden')?.classList.remove('hidden')
-        if (e.day >= 100)
-            document.querySelector('#status-timewarp-panel').classList.add('unlocked')
     })
 </script>
