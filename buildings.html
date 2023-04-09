@@ -7,6 +7,7 @@
             overflow-y: hidden;
             height: 2rem; /* the height of header */
             padding: 0 .5rem;
+            margin-top: 1rem;
         }
         :host(.unlocked) {
             display: block;
@@ -27,26 +28,37 @@
             font-size: .9rem;
         }
         .detail p {
+            margin: 0;
+        }
+        .detail p:first-child {
             margin: .3rem 0 .5rem;
+        }
+        .detail .title {
+            font-weight: bold;
         }
         .operation {
             display: flex;
             justify-content: space-around;
             align-items: center;
+            margin-top: .5rem;
             margin-bottom: .4rem;
         }
 
-        .build-cost { display: inline; }
-        :host(.built) .build-cost { display: none; }
+        .cost > *, .product > *, .upgrade-cost > *, .build-cost > * {
+            display: block;
+        }
 
         .cost { display: none; }
-        :host(.built) .cost { display: inline; }
+        :host(.built) .cost { display: flex; }
 
         .product { display: none; }
-        :host(.built) .product { display: inline; }
+        :host(.built) .product { display: flex; }
 
         .upgrade-cost { display: none; }
-        :host(.built) .upgrade-cost { display: inline; }
+        :host(.built) .upgrade-cost { display: flex; }
+
+        .build-cost { display: flex; }
+        :host(.built) .build-cost { display: none; }
 
         :host(.built) .build { display: none; }
 
@@ -65,6 +77,11 @@
 
     <div class="body">
         <div class="detail">
+            <p class="description"></p>
+            <p class="cost"><ca-text class="title" data-zh="消耗：" data-en="Consume: " data-style-en="margin-right: .4rem"></ca-text><span class="content"></span></p>
+            <p class="product"><ca-text class="title" data-zh="产出：" data-en="Product: " data-style-en="margin-right: .4rem"></ca-text><span class="content"></span></p>
+            <p class="upgrade-cost"><ca-text class="title" data-zh="升级需求：" data-en="Upgrade Cost: " data-style-en="margin-right: .4rem"></ca-text><ca-building-detail-slot>upgrade_cost</ca-building-detail-slot></p>
+            <p class="build-cost"><ca-text class="title" data-zh="建造需求：" data-en="Build Cost: " data-style-en="margin-right: .4rem"></ca-text><ca-building-detail-slot>build_cost</ca-building-detail-slot></p>
         </div>
         <div class="operation">
             <button class="build"><ca-text data-zh="建造" data-en="Build"></ca-text></button>
@@ -120,10 +137,14 @@
             })
 
             const detail = this.shadowRoot.querySelector('.detail')
-            detail.innerHTML = this.detail[game.lang] ?? this.detail['zh']
             game.on('config.lang', detail.lang_callback = e => {
-                detail.innerHTML = this.detail[e.lang] ?? this.detail['zh']
+                detail.querySelector('.description').innerHTML = this.detail.description[e.lang] ?? this.detail.description['zh']
+                detail.querySelector('.cost .content').innerHTML = this.detail.cost[e.lang] ?? this.detail.cost['zh']
+                if (detail.querySelector('.cost .content').innerHTML.trim() == '')
+                    detail.querySelector('.cost').style.display = 'none'
+                detail.querySelector('.product .content').innerHTML = this.detail.product[e.lang] ?? this.detail.product['zh']
             })
+            detail.lang_callback({lang: game.lang})
 
             this.shadowRoot.querySelector('.header').addEventListener('click', e => {
                 game.pool_with_message({event: `${this.name}.detail`})
@@ -177,7 +198,8 @@
                     } else {
                         let content = ''
                         for (const [resource, [amount, sufficient]] of Object.entries(e[field_name])) {
-                            content += `${amount} <ca-resource>${resource}</ca-resource><span style="margin-left: .4em"></span>`
+                            if (content != '') content += '<br>'
+                            content += `${amount} <ca-resource>${resource}</ca-resource>`
                         }
                         if (content === '') {
                             switch (game.lang) {

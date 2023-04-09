@@ -6,7 +6,6 @@
 #![feature(const_mut_refs)]
 
 use std::{collections::BTreeMap, fmt::Debug, ops::{Index, IndexMut}, rc::Rc, f64::consts::LN_10, borrow::Borrow};
-use indoc::formatdoc;
 use serde_json::{json, Value as JsonValue};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -35,12 +34,22 @@ impl ExpNum {
         self.0
     }
 
+    // Somehow behave strangely when 0 is involved, so special case them
+
+    fn zero() -> Self {
+        Self(f64::NEG_INFINITY)
+    }
+
+    fn is_zero(&self) -> bool {
+        self.0 == f64::NEG_INFINITY
+    }
+
     fn pow(self, rhs: impl Into<f64>) -> Self {
         Self(self.0 * rhs.into())
     }
 
     fn format(&self, format: &str, output_type: &str) -> String {
-        if self.0 == f64::NEG_INFINITY {
+        if self.is_zero() {
             return String::from("0");
         }
     
@@ -136,6 +145,10 @@ impl std::ops::Add for ExpNum {
     type Output = Self;
 
     fn add(self, rhs: Self) -> Self::Output {
+        if self.is_zero() {
+            return rhs;
+        }
+
         let (larger, smaller) = if self.0 > rhs.0 {
             (self.0, rhs.0)
         } else {
@@ -149,6 +162,10 @@ impl std::ops::Sub for ExpNum {
     type Output = Self;
 
     fn sub(self, rhs: Self) -> Self::Output {
+        if rhs.is_zero() {
+            return self;
+        }
+
         assert!(self >= rhs);
         Self(self.0 + (-(rhs.0 - self.0).exp()).ln_1p())
     }
@@ -158,6 +175,9 @@ impl std::ops::Mul for ExpNum {
     type Output = Self;
 
     fn mul(self, rhs: Self) -> Self::Output {
+        if self.is_zero() || rhs.is_zero() {
+            return Self::zero();
+        }
         Self(self.0 + rhs.0)
     }
 }
@@ -166,6 +186,12 @@ impl std::ops::Div for ExpNum {
     type Output = Self;
 
     fn div(self, rhs: Self) -> Self::Output {
+        if self.is_zero() {
+            return self;
+        }
+        if rhs.is_zero() {
+            panic!("divide by zero");
+        }
         Self(self.0 - rhs.0)
     }
 }
@@ -234,6 +260,10 @@ mod test_expnum {
         let a = ExpNum::from_exp(800);
         let b = ExpNum::from_exp(1600);
         assert!(f64::from(a.pow(2) - b) < 1e-9);
+
+        let a = ExpNum::from(0.);
+        let b = ExpNum::from(0.);
+        assert!(f64::from(a + b) < 1e-9);
     }
 }
 
@@ -282,7 +312,7 @@ new_usize_type!(pub, BuildingId);
 struct Building {
     name: &'static str,
     display_name: JsonValue,
-    detail: JsonValue // in HTML string
+    detail: JsonValue
 }
 
 #[derive(Clone, Copy)]
@@ -510,7 +540,7 @@ fn init_game_def() {
             let product_fun = product_fun.clone();
 
             Box::new(move |game, _msg| {
-                if !game[id]["enabled"].as_bool() {
+                if !game[id].get("enabled").map_or(false, |x| x.as_bool()) {
                     return;
                 }
 
@@ -554,7 +584,7 @@ fn init_game_def() {
             let build_cost_fun = build_cost_fun.clone();
 
             Box::new(move |game, _msg| {
-                if !game[id]["unlocked"].as_bool() {
+                if !game[id].get("unlocked").map_or(false, |x| x.as_bool()) {
                     return;
                 }
 
@@ -588,7 +618,7 @@ fn init_game_def() {
         });
 
         game_def.add_handler(format!("{name}.enable"), Box::new(move |game, _msg| {
-            if !game[id]["built"].as_bool() {
+            if !game[id].get("built").map_or(false, |x| x.as_bool()) {
                 return;
             }
 
@@ -597,7 +627,7 @@ fn init_game_def() {
         }));
 
         game_def.add_handler(format!("{name}.disable"), Box::new(move |game, _msg| {
-            if !game[id]["built"].as_bool() {
+            if !game[id].get("built").map_or(false, |x| x.as_bool()) {
                 return;
             }
 
@@ -609,7 +639,7 @@ fn init_game_def() {
             let upgrade_cost_fun = upgrade_cost_fun.clone();
 
             Box::new(move |game, _msg| {
-                if !game[id]["built"].as_bool() {
+                if !game[id].get("built").map_or(false, |x| x.as_bool()) {
                     return;
                 }
 
@@ -635,11 +665,14 @@ fn init_game_def() {
                 let current_level = game[id]["level"].as_int();
                 game[id].insert("level".to_string(), BuildingProperty::Int(current_level + 1));
                 game.post_building_properties(id);
+                game.dispatch_message(json!({
+                    "event": format!("{name}.upgraded")
+                }));
             })
         });
 
         game_def.add_handler(format!("{name}.downgrade"), Box::new(move |game, _msg| {
-            if !game[id]["built"].as_bool() {
+            if !game[id].get("built").map_or(false, |x| x.as_bool()) {
                 return;
             }
 
@@ -659,6 +692,11 @@ fn init_game_def() {
             let upgrade_cost_fun = upgrade_cost_fun.clone();
 
             Box::new(move |game, _msg| {
+                // getting details use some information that is may not always available
+                if !game[id].get("unlocked").map_or(false, |x| x.as_bool()) {
+                    return;
+                }
+
                 let mut message = json!({
                     "event": format!("{name}.detail"),
                     "cost": {},
@@ -710,22 +748,18 @@ fn init_game_def() {
             "zh": "帐篷",
         }),
         detail: json!({
-            "en": formatdoc! {r#"
-                <p>A tent. Generates man power.</p>
-                <p>
-                <span class="product"><strong style="margin-right: .2rem">Products:</strong> <ca-katex>2 ^ {{\text{{level}} - 1}}</ca-katex> = <ca-building-detail-slot>product.man</ca-building-detail-slot> <ca-resource>man</ca-resource><br></span>
-                <span class="upgrade-cost"><strong style="margin-right: .2rem">Upgrade Cost:</strong> <ca-building-detail-slot>upgrade_cost</ca-building-detail-slot><br></span>
-                <span class="build-cost"><strong style="margin-right: .2rem">Build Cost:</strong> <ca-building-detail-slot>build_cost</ca-building-detail-slot><br></span>
-                </p>
-            "#},
-            "zh": formatdoc! {r#"
-                <p>一个帐篷。生成人力。</p>
-                <p>
-                <span class="product"><strong style="margin-right: .1rem">产出：</strong><ca-katex>2 ^ {{\text{{\tiny 等级}} - 1}}</ca-katex> = <ca-building-detail-slot>product.man</ca-building-detail-slot> <ca-resource>man</ca-resource><br></span>
-                <span class="upgrade-cost"><strong style="margin-right: .2rem">升级需求：</strong><ca-building-detail-slot>upgrade_cost</ca-building-detail-slot><br></span>
-                <span class="build-cost"><strong style="margin-right: .2rem">建造需求：</strong><ca-building-detail-slot>build_cost</ca-building-detail-slot><br></span>
-                </p>
-            "#},
+            "description": {
+                "en": r#"A tent. Generates <ca-resource>man</ca-resource>."#,
+                "zh": r#"一个帐篷。生成<ca-resource>man</ca-resource>。"#,
+            },
+            "cost": {
+                "en": r#""#,
+                "zh": r#""#,
+            },
+            "product": {
+                "en": r#"<ca-katex>2 ^ {{\text{{level}} - 1}}</ca-katex> = <ca-building-detail-slot>product.man</ca-building-detail-slot> <ca-resource>man</ca-resource>"#,
+                "zh": r#"<ca-katex>2 ^ {{\text{{\tiny 等级}} - 1}}</ca-katex> = <ca-building-detail-slot>product.man</ca-building-detail-slot> <ca-resource>man</ca-resource>"#,
+            }
         })
     },
     // cost
@@ -758,6 +792,134 @@ fn init_game_def() {
         game[building_tent_id].insert("enabled".to_string(), BuildingProperty::Bool(true));
         game[building_tent_id].insert("level".to_string(), BuildingProperty::Int(1));
         game.post_building_properties(building_tent_id);
+    }));
+
+
+    let building_forest_id = BuildingId(game_def.buildings.len());
+    add_building(game_def, Building {
+        name: "forest",
+        display_name: json!({
+            "en": "Forest",
+            "zh": "森林",
+        }),
+        detail: json!({
+            "description": {
+                "en": r#"A forest. Excessive <ca-resource>man</ca-resource> reduces <ca-resource>wood</ca-resource> production."#,
+                "zh": r#"一片森林。过多<ca-resource>man</ca-resource>会减少<ca-resource>wood</ca-resource>产出。"#,
+            },
+            "cost": {
+                "en": r#""#,
+                "zh": r#""#,
+            },
+            "product": {
+                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} - \text{{MP}} ^ 2</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource>"#,
+                "zh": r#"<ca-katex>2 ^ {{\text{{\tiny 等级}} + 10}} - \text{{人}} ^ 2</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource>"#,
+            }
+        })
+    },
+    // cost
+    Rc::new(move |_| vec![]),
+    // product
+    Rc::new(move |game| {
+        let level = game[building_forest_id]["level"].as_int();
+        let man = game[resource_man_id];
+        let a = ExpNum::from(2.).pow(level + 10);
+        let b = man * man;
+        let product = if a > b {
+            a - b
+        } else {
+            ExpNum::from(0.)
+        };
+        vec![(resource_wood_id, product)]
+    }),
+    // upgrade cost
+    Rc::new(move |game| {
+        let level = game[building_forest_id]["level"].as_int();
+        vec![
+            (resource_water_id, ExpNum::from(2.2).pow(level + 8)),
+            (resource_earth_id, ExpNum::from(2.).pow(level + 10)),
+        ]
+    }),
+    // build cost
+    Rc::new(move |_| vec![]));
+
+    game_def.add_handler("tent.upgraded", Box::new(move |game, _msg| {
+        if game[building_forest_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+            return;
+        }
+        let tent_level = game[building_tent_id]["level"].as_int();
+        if tent_level >= 5 {
+            game[building_forest_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+            game[building_forest_id].insert("built".to_string(), BuildingProperty::Bool(true));
+            game[building_forest_id].insert("enabled".to_string(), BuildingProperty::Bool(true));
+            game[building_forest_id].insert("level".to_string(), BuildingProperty::Int(1));
+            game.post_building_properties(building_forest_id);
+        }
+    }));
+
+
+    let building_swamp_id = BuildingId(game_def.buildings.len());
+    add_building(game_def, Building {
+        name: "swamp",
+        display_name: json!({
+            "en": "Swamp",
+            "zh": "沼泽",
+        }),
+        detail: json!({
+            "description": {
+                "en": r#"Generates <ca-resource>water</ca-resource> and <ca-resource>earth</ca-resource> based on thier ratio."#,
+                "zh": r#"根据<ca-resource>water</ca-resource>和<ca-resource>earth</ca-resource>的比例生成<ca-resource>water</ca-resource>和<ca-resource>earth</ca-resource>。"#,
+            },
+            "cost": {
+                "en": r#""#,
+                "zh": r#""#,
+            },
+            "product": {
+                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} \times \frac{{\text{{Water}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 10}} \times \frac{{\text{{Earth}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+                "zh": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} \times \frac{{\text{{水}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 10}} \times \frac{{\text{{土}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+            }
+        })
+    },
+    // cost
+    Rc::new(move |_| vec![]),
+    // product
+    Rc::new(move |game| {
+        let level = game[building_swamp_id]["level"].as_int();
+        let water = game[resource_water_id];
+        let earth = game[resource_earth_id];
+        
+        let coeff = ExpNum::from(2.).pow(level + 10);
+
+        let water_production = coeff * (water + ExpNum::from(1.)) / (water + earth + ExpNum::from(1.));
+        let earth_production = coeff * (earth + ExpNum::from(1.)) / (water + earth + ExpNum::from(1.));
+        vec![
+            (resource_water_id, water_production),
+            (resource_earth_id, earth_production)
+        ]
+    }),
+    // upgrade cost
+    Rc::new(move |game| {
+        let level = game[building_swamp_id]["level"].as_int();
+        vec![
+            (resource_water_id, ExpNum::from(2.2).pow(level+8)),
+            (resource_earth_id, ExpNum::from(2.2).pow(level+8)),
+        ]
+    }),
+    // build cost
+    Rc::new(move |_| vec![]));
+
+    game_def.add_handler("tent.upgraded", Box::new(move |game, _msg| {
+        if game[building_swamp_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+            return;
+        }
+        let tent_level = game[building_tent_id]["level"].as_int();
+        if tent_level >= 5 {
+            game[building_swamp_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+            game[building_swamp_id].insert("built".to_string(), BuildingProperty::Bool(true));
+            game[building_swamp_id].insert("enabled".to_string(), BuildingProperty::Bool(true));
+            game[building_swamp_id].insert("level".to_string(), BuildingProperty::Int(1));
+            game.post_building_properties(building_swamp_id);
+        }
     }));
 
 

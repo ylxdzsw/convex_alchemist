@@ -15,6 +15,16 @@ function read_user_language() {
     }
 }
 
+function trim_text_node(node) {
+    if (node.nodeType === Node.TEXT_NODE) {
+        node.textContent = node.textContent.trim()
+    } else {
+        for (const child of node.childNodes) {
+            trim_text_node(child)
+        }
+    }
+}
+
 const game = {
     handlers: Object.create(null),
 
