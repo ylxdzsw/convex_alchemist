@@ -4,7 +4,7 @@
     data-title-en="Settings"
 >
 <button id="settings-export"><ca-text data-en="Export Save File" data-zh="导出存档"></ca-text></button>
-<button id="settings-load"><ca-text data-en="Load Save File" data-zh="导入存档"></ca-text></button>
+<button id="settings-import"><ca-text data-en="Import Save File" data-zh="导入存档"></ca-text></button>
 </ca-card>
 
 <script type="module">
@@ -12,7 +12,7 @@
         game.export()
     })
 
-    document.querySelector("#settings-load").addEventListener('click', () => {
-        game.load()
+    document.querySelector("#settings-import").addEventListener('click', () => {
+        game.import()
     })
 </script>

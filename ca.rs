@@ -1217,6 +1217,14 @@ impl Game {
             }
         }
     }
+
+    fn post_everything(&mut self) {
+        self.post_status();
+        self.post_resources();
+        for (i, _) in game_def!().buildings.iter().enumerate() {
+            self.post_building_properties(BuildingId(i));
+        }
+    }
 }
 
 impl Index<ResourceId> for Game {
@@ -1287,7 +1295,7 @@ unsafe extern fn game_new() -> *mut Game {
 }
 
 #[no_mangle]
-unsafe extern fn game_export(game: *mut Game) {
+unsafe extern fn game_dump(game: *mut Game) {
     let game = &mut *game;
     write_json_buffer(json!(game.history))
 }
@@ -1298,6 +1306,8 @@ unsafe extern fn game_load(game: *mut Game) {
     assert!(game.history.is_empty());
     if let Ok(history) = read_json_buffer() {
         game.fast_forward(history.as_array().unwrap().clone(), u32::MAX);
+        game.post_everything();
+        write_json_buffer(json!(std::mem::take(&mut game.message_queue)));
     } else {
         game.post_bug("failed to parse json");
     }
@@ -1309,6 +1319,8 @@ unsafe extern fn game_timewarp(game: *mut Game, day: u32) {
     let history = std::mem::take(&mut game.history);
     *game = Game::new();
     game.fast_forward(history, day);
+    game.post_everything();
+    write_json_buffer(json!(std::mem::take(&mut game.message_queue)));
 }
 
 #[no_mangle]

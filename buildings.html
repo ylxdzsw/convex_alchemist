@@ -197,6 +197,11 @@
             game.on('config.devmode', this.devmode_callback = e => {
                 this.classList.add('devmode')
             })
+
+            game.on('reset', this.reset = e => {
+                this.classList.remove('unlocked', 'built', 'enabled', 'expanded', 'max-level')
+                this.shadowRoot.querySelector('.header .income').innerHTML = ''
+            })
         }
     })
 </script>

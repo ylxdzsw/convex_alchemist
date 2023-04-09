@@ -86,11 +86,11 @@ const game = {
     /// write to the json buffer. An API must be used to let the engine read and free the buffer
     write_wasm_json(e, stringify = true) {
         if (stringify) e = JSON.stringify(e)
-        const str = new TextEncoder().encode(e)
-        ca.alloc_json_buffer(str.length)
+        const encoded = new TextEncoder().encode(e)
+        ca.alloc_json_buffer(encoded.length)
         const buffer = new Uint32Array(ca.memory.buffer, ca.JSON_BUFFER, 2)
-        new Uint8Array(ca.memory.buffer, buffer[0], str.length).set(str)
-        buffer[1] = str.length
+        new Uint8Array(ca.memory.buffer, buffer[0], encoded.length).set(encoded)
+        buffer[1] = encoded.length
     },
 
     /// reads the json buffer and process the messages
@@ -119,10 +119,11 @@ const game = {
         })
     },
 
-    step() {
+    async step() {
         game.pool_with_message({event: 'step'})
         for (const building of document.querySelectorAll('ca-building.expanded'))
             game.pool_with_message({event: `${building.name}.detail`})
+        await game.save_to_local_storage()
     },
 
     init_game() {
@@ -130,11 +131,28 @@ const game = {
         game.ptr = ca.game_new()
         game.pool_with_message({event: 'init', rand_seed: 1145141919})
         game.show_help()
+        game.log({
+            zh: `游戏初始化完成。`,
+            en: `Game initialized.`
+        })
+    },
+
+    dump() {
+        ca.game_dump(game.ptr)
+        return game.read_wasm_json(false)
+    },
+
+    load(data_str) {
+        if (game.ptr) ca.game_free(game.ptr)
+        game.ptr = ca.game_new()
+        game.write_wasm_json(data_str, false)
+        ca.game_load(game.ptr)
+        game.dispatch_message({ event: 'reset' })
+        game.process_back_message()
     },
 
     async export() {
-        ca.game_export(game.ptr)
-        const str = game.read_wasm_json(false)
+        const str = game.dump()
         const compressed = await compress(str)
         const blob = new Blob([compressed], {type: "application/octet-stream"})
         const a = document.createElement('a')
@@ -143,23 +161,38 @@ const game = {
         a.click()
     },
 
-    async load() {
+    async import() {
         const input = document.createElement('input')
         input.type = 'file'
         input.accept = '.ca'
         input.onchange = async () => {
-            const file = input.files[0]
-            const buffer = await file.arrayBuffer()
+            const buffer = await input.files[0].arrayBuffer()
             const decompressed = await decompress(buffer)
-            console.log(decompressed)
+            game.load(decompressed)
+            game.log({
+                zh: `游戏存档读取完成。`,
+                en: `Save file loaded.`
+            })
         }
         input.click()
     },
 
+    async save_to_local_storage() {
+        localStorage.setItem('save.ca', game.dump())
+    },
+
+    async load_from_local_storage() {
+        game.load(localStorage.getItem('save.ca'), false)
+        game.log({
+            zh: `游戏存档读取完成。`,
+            en: `Save file loaded.`
+        })
+    },
+
     show_help() {
         game.log({
-            zh: `游戏初始化完成。点击“前进一天”推动游戏进程。点击建筑名称打开详情页。`,
-            en: `Game initialized. Click "step" to advance the game. Click building name to open details.`,
+            zh: `点击“前进一天”推动游戏进程。点击建筑名称打开详情页。`,
+            en: `Click "step" to advance the game. Click building name to open details.`,
         })
     },
 }
@@ -173,6 +206,15 @@ addEventListener("DOMContentLoaded", async () => {
 
     if (/devmode/.test(location.search))
         game.dispatch_message({ event: 'config.devmode' })
+
+    if (localStorage?.getItem('save.ca')) {
+        try {
+            await game.load_from_local_storage()
+        } catch (e) {
+            console.error(e)
+            localStorage.removeItem('save.ca')
+        }
+    }
 })
 
 /*
