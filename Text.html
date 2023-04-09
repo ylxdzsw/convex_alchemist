@@ -10,15 +10,8 @@
             super()
             const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
             this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
-            customElements.upgrade(this)
 
             game.on('config.lang', this.render = this.render.bind(this))
-        }
-
-        set_content(lang_dict) {
-            for (const [lang, content] of Object.entries(lang_dict))
-                this.dataset[lang] = content
-            this.render()
         }
 
         connectedCallback() {
@@ -29,6 +22,14 @@
             this.shadowRoot.querySelector('span').textContent = this.dataset[lang] ?? this.dataset.zh
             if (this.getAttribute(`data-style-${lang}`))
                 this.shadowRoot.querySelector('span').setAttribute('style', this.getAttribute(`data-style-${lang}`))
+        }
+
+        static get observedAttributes() {
+            return ['data-en']
+        }
+
+        attributeChangedCallback(name, oldValue, newValue) {
+            setTimeout(() => this.render(), 0)
         }
     })
 </script>

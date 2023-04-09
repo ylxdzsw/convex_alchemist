@@ -115,7 +115,6 @@
     game.on('status', day.update = e => {
         day.dataset.zh = `第${e.day}天`
         day.dataset.en = `Day ${e.day}`
-        day.render()
         if (e.day >= 10)
             document.querySelector('#status-speed-control .hidden')?.classList.remove('hidden')
     })
