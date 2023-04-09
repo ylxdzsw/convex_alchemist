@@ -671,6 +671,15 @@ fn init_game_def() {
             })
         });
 
+        game_def.add_handler(format!("{name}.devupgrade"), Box::new(move |game, _msg| {
+            let current_level = game[id]["level"].as_int();
+            game[id].insert("level".to_string(), BuildingProperty::Int(current_level + 1));
+            game.post_building_properties(id);
+            game.dispatch_message(json!({
+                "event": format!("{name}.upgraded")
+            }));
+        }));
+
         game_def.add_handler(format!("{name}.downgrade"), Box::new(move |game, _msg| {
             if !game[id].get("built").map_or(false, |x| x.as_bool()) {
                 return;

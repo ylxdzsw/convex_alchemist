@@ -62,12 +62,22 @@
 
         :host(.built) .build { display: none; }
 
-        ca-text.disabled { color: #bbb; }
-        :host(.enabled) ca-text.disabled { display: none; }
         :host(.enabled) .enable { display: none; }
+
         .disable { display: none; }
         :host(.enabled) .disable { display: inline; }
 
+        ca-text.disabled { color: #bbb; }
+        :host(.enabled) ca-text.disabled { display: none; }
+
+        .downgrade { display: none; }
+        :host(.built) .downgrade { display: inline; }
+
+        .upgrade { display: none; }
+        :host(.built) .upgrade { display: inline; }
+
+        .devupgrade { display: none; }
+        :host(.built.devmode) .devupgrade { display: inline; }
     </style>
 
     <div class="header">
@@ -89,6 +99,7 @@
             <button class="disable"><ca-text data-zh="停用" data-en="Disable"></ca-text></button>
             <button class="downgrade"><ca-text data-zh="降级" data-en="Downgrade"></ca-text></button>
             <button class="upgrade"><ca-text data-zh="升级" data-en="Upgrade"></ca-text></button>
+            <button class="devupgrade"><ca-text data-zh="作弊升级" data-en="Dev Upgrade"></ca-text></button>
         </div>
     </div>
 </template>
@@ -169,6 +180,14 @@
 
             this.shadowRoot.querySelector('button.upgrade').addEventListener('click', e => {
                 game.pool_with_message({event: `${this.name}.upgrade`})
+            })
+
+            this.shadowRoot.querySelector('button.devupgrade').addEventListener('click', e => {
+                game.pool_with_message({event: `${this.name}.devupgrade`})
+            })
+
+            game.on('config.devmode', this.devmode_callback = e => {
+                this.classList.add('devmode')
             })
         }
     })

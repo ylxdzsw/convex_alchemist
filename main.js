@@ -119,6 +119,12 @@ addEventListener("DOMContentLoaded", async () => {
     await wasm_ready
 
     game.init_game()
+
+    document.querySelector('#bottom-notice').addEventListener('click', function () {
+        this.counter = (this.counter ?? 0) + 1
+        if (this.counter >= 5)
+            game.dispatch_message({ event: 'config.devmode' })
+    })
 })
 
 /*
