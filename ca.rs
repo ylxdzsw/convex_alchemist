@@ -1321,7 +1321,9 @@ unsafe extern fn poll(game: *mut Game) {
     let game = &mut *game;
 
     if let Ok(event) = read_json_buffer() {
-        game.history.push(event.clone());
+        if !event["event"].as_str().unwrap().ends_with(".detail") { // TODO
+            game.history.push(event.clone());
+        }
 
         game.dispatch_message(event);
         game.post_status();
