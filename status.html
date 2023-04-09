@@ -15,6 +15,12 @@
         <button id="status-speed-control-play-pause">⏯</button>
     </div>
 </div>
+<div id="status-timewarp-panel">
+    <ca-text data-zh="（不可逆转）回溯到第" data-en="(Irreversible) Warp back to Day "></ca-text>
+    <input id="status-timewarp-target" type="number" min="0" step="1"></input>
+    <ca-text data-zh="天" data-en=""></ca-text>
+    <button id="status-timewarp-button"><ca-text data-zh="回溯" data-en="Warp" ></ca-text></button>
+</div>
 </ca-card>
 
 <style>
@@ -28,6 +34,15 @@
     }
     #status-speed-control .hidden {
         display: none;
+    }
+    #status-timewarp-panel {
+        display: none;
+    }
+    #status-timewarp-target {
+        width: 3rem;
+    }
+    #status-timewarp-panel.expanded.unlocked {
+        display: block;
     }
 </style>
 
@@ -84,11 +99,26 @@
         }
     })
 
+    document.querySelector('#status-speed-control-day').addEventListener('click', () => {
+        document.querySelector('#status-timewarp-panel').classList.toggle('expanded')
+    })
+
+    document.querySelector('#status-timewarp-button').addEventListener('click', async () => {
+        const target = parseInt(document.querySelector('#status-timewarp-target').value)
+        if (isNaN(target)) return
+        if (target < 0) return
+
+        await game.timewarp(target)
+        document.querySelector('#status-timewarp-panel').classList.remove('expanded')
+    })
+
     game.on('status', day.update = e => {
         day.dataset.zh = `第${e.day}天`
         day.dataset.en = `Day ${e.day}`
         day.render()
         if (e.day >= 10)
             document.querySelector('#status-speed-control .hidden')?.classList.remove('hidden')
+        if (e.day >= 100)
+            document.querySelector('#status-timewarp-panel').classList.add('unlocked')
     })
 </script>

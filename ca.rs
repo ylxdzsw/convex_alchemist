@@ -839,8 +839,8 @@ fn init_game_def() {
                 "zh": r#""#,
             },
             "product": {
-                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} - \text{{MP}} ^ {{1.5}}</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource>"#,
-                "zh": r#"<ca-katex>2 ^ {{\text{{\tiny 等级}} + 10}} - \text{{人}} ^ {{1.5}}</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource>"#,
+                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} - \text{{MP}} ^ {{0.8}}</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource>"#,
+                "zh": r#"<ca-katex>2 ^ {{\text{{\tiny 等级}} + 10}} - \text{{人}} ^ {{0.8}}</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource>"#,
             }
         })
     },
@@ -851,7 +851,7 @@ fn init_game_def() {
         let level = game[building_forest_id]["level"].as_int();
         let man = game[resource_man_id];
         let a = ExpNum::from(2.).pow(level + 10);
-        let b = man.pow(1.5);
+        let b = man.pow(0.8);
         let product = if a > b {
             a - b
         } else {
@@ -903,8 +903,8 @@ fn init_game_def() {
                 "zh": r#""#,
             },
             "product": {
-                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} \times \frac{{\text{{Water}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 10}} \times \frac{{\text{{Earth}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
-                "zh": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} \times \frac{{\text{{水}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 10}} \times \frac{{\text{{土}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{Water}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{Earth}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+                "zh": r#"<ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{水}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{土}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
             }
         })
     },
@@ -916,7 +916,7 @@ fn init_game_def() {
         let water = game[resource_water_id];
         let earth = game[resource_earth_id];
         
-        let coeff = ExpNum::from(2.).pow(level + 10);
+        let coeff = ExpNum::from(2.).pow(level + 8);
 
         let water_production = coeff * (water + ExpNum::from(1.)) / (water + earth + ExpNum::from(1.));
         let earth_production = coeff * (earth + ExpNum::from(1.)) / (water + earth + ExpNum::from(1.));
@@ -929,8 +929,8 @@ fn init_game_def() {
     Rc::new(move |game| {
         let level = game[building_swamp_id]["level"].as_int();
         vec![
-            (resource_water_id, ExpNum::from(2.2).pow(level+8)),
-            (resource_earth_id, ExpNum::from(2.2).pow(level+8)),
+            (resource_water_id, ExpNum::from(2.3).pow(level+10)),
+            (resource_earth_id, ExpNum::from(2.3).pow(level+10)),
         ]
     }),
     // build cost
@@ -1208,8 +1208,8 @@ impl Game {
     }
 
     fn fast_forward(&mut self, events: Vec<JsonValue>, max_days: u32) {
-        self.history.extend(events.clone());
         for event in events {
+            self.history.push(event.clone());
             self.dispatch_message(event);
             self.message_queue.clear();
             if self.day >= max_days {
