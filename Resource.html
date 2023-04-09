@@ -5,6 +5,8 @@
 </template>
 
 <script>
+    trim_text_node(document.querySelector('#template-resource').content)
+
     customElements.define('ca-resource', class extends HTMLElement {
         constructor() {
             super()

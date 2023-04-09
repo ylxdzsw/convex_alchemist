@@ -3,6 +3,8 @@
 </template>
 
 <script>
+    trim_text_node(document.querySelector('#template-text').content)
+
     customElements.define('ca-text', class extends HTMLElement {
         constructor() {
             super()
@@ -25,6 +27,8 @@
 
         render(lang = game.lang) {
             this.shadowRoot.querySelector('span').textContent = this.dataset[lang] || this.dataset.zh
+            if (this.getAttribute(`data-style-${lang}`))
+                this.shadowRoot.querySelector('span').setAttribute('style', this.getAttribute(`data-style-${lang}`))
         }
     })
 </script>
