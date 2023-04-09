@@ -23,7 +23,9 @@
             // TODO: icon
             this.shadowRoot.querySelector('.icon').remove()
             const display_name = document.querySelector(`#inventory-item-${name}`).display_name
-            this.shadowRoot.querySelector('.name').set_content(display_name)
+            for (const [lang, content] of Object.entries(display_name))
+                this.shadowRoot.querySelector('.name').dataset[lang] = content
+            this.shadowRoot.querySelector('.name').render?.()
         }
     })
 </script>
