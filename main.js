@@ -130,7 +130,6 @@ const game = {
         if (game.ptr) throw new Error('game already initialized')
         game.ptr = ca.game_new()
         game.pool_with_message({event: 'init', rand_seed: 1145141919})
-        game.show_help()
         game.log({
             zh: `游戏初始化完成。`,
             en: `Game initialized.`
@@ -147,6 +146,12 @@ const game = {
         game.ptr = ca.game_new()
         game.write_wasm_json(data_str, false)
         ca.game_load(game.ptr)
+        game.dispatch_message({ event: 'reset' })
+        game.process_back_message()
+    },
+
+    timewarp(day) {
+        ca.game_timewarp(game.ptr, day)
         game.dispatch_message({ event: 'reset' })
         game.process_back_message()
     },
@@ -212,8 +217,13 @@ addEventListener("DOMContentLoaded", async () => {
             await game.load_from_local_storage()
         } catch (e) {
             console.error(e)
-            localStorage.removeItem('save.ca')
+            game.log({
+                zh: `游戏存档读取失败，可能已经损坏。继续游戏将覆盖存档。`,
+                en: `Save file corrupted. Continue will overwrite the save file.`,
+            })
         }
+    } else {
+        game.show_help()
     }
 })
 

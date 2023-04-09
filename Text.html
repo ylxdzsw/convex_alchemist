@@ -26,7 +26,7 @@
         }
 
         render(lang = game.lang) {
-            this.shadowRoot.querySelector('span').textContent = this.dataset[lang] || this.dataset.zh
+            this.shadowRoot.querySelector('span').textContent = this.dataset[lang] ?? this.dataset.zh
             if (this.getAttribute(`data-style-${lang}`))
                 this.shadowRoot.querySelector('span').setAttribute('style', this.getAttribute(`data-style-${lang}`))
         }
