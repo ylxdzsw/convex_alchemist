@@ -1,6 +1,12 @@
 function check_browser_compatability() {
-    return `=== Browser Compatability ===\n` +
-        `template element: ${'content' in document.createElement('template')}\n`
+    if (!('content' in document.createElement('template')))
+        alert("Your browser is too old to run this game. Please upgrade to a modern browser.")
+
+    try {
+        compress("test")
+    } catch {
+        alert("Your browser does not support compression. Please upgrade to a modern browser.")
+    }
 }
 
 function read_user_language() {
@@ -23,6 +29,21 @@ function trim_text_node(node) {
             trim_text_node(child)
         }
     }
+}
+
+async function compress(str) {
+    const encoded = new TextEncoder().encode(str)
+    const compressor = new CompressionStream("deflate-raw")
+    const writer = compressor.writable.getWriter()
+    writer.write(encoded).then(() => writer.close())
+    return await new Response(compressor.readable).arrayBuffer()
+}
+
+async function decompress(buffer) {
+    const decompressor = new DecompressionStream("deflate-raw")
+    const writer = decompressor.writable.getWriter()
+    writer.write(buffer).then(() => writer.close())
+    return await new Response(decompressor.readable).text()
 }
 
 const game = {
@@ -54,11 +75,22 @@ const game = {
     },
 
     /// reads the json buffer and returns the parsed json
-    read_wasm_json() {
+    read_wasm_json(parse = true) {
         const [ptr, len] = new Uint32Array(ca.memory.buffer, ca.JSON_BUFFER, 2)
         const str = new TextDecoder().decode(new Uint8Array(ca.memory.buffer, ptr, len))
         ca.free_json_buffer()
+        if (!parse) return str
         return JSON.parse(str)
+    },
+
+    /// write to the json buffer. An API must be used to let the engine read and free the buffer
+    write_wasm_json(e, stringify = true) {
+        if (stringify) e = JSON.stringify(e)
+        const str = new TextEncoder().encode(e)
+        ca.alloc_json_buffer(str.length)
+        const buffer = new Uint32Array(ca.memory.buffer, ca.JSON_BUFFER, 2)
+        new Uint8Array(ca.memory.buffer, buffer[0], str.length).set(str)
+        buffer[1] = str.length
     },
 
     /// reads the json buffer and process the messages
@@ -70,11 +102,7 @@ const game = {
     /// the returned message is left in the buffer and should be read immediately
     post_message_back(e) {
         console.log("post_message_back", e)
-        const str = new TextEncoder().encode(JSON.stringify(e))
-        ca.alloc_json_buffer(str.length)
-        const buffer = new Uint32Array(ca.memory.buffer, ca.JSON_BUFFER, 2)
-        new Uint8Array(ca.memory.buffer, buffer[0], str.length).set(str)
-        buffer[1] = str.length
+        game.write_wasm_json(e)
         ca.poll(game.ptr)
     },
 
@@ -99,9 +127,33 @@ const game = {
 
     init_game() {
         if (game.ptr) throw new Error('game already initialized')
-        game.ptr = ca.game_new(1145141919)
-        game.pool_with_message({event: 'init'})
+        game.ptr = ca.game_new()
+        game.pool_with_message({event: 'init', rand_seed: 1145141919})
         game.show_help()
+    },
+
+    async export() {
+        ca.game_export(game.ptr)
+        const str = game.read_wasm_json(false)
+        const compressed = await compress(str)
+        const blob = new Blob([compressed], {type: "application/octet-stream"})
+        const a = document.createElement('a')
+        a.href = URL.createObjectURL(blob)
+        a.download = 'save.ca'
+        a.click()
+    },
+
+    async load() {
+        const input = document.createElement('input')
+        input.type = 'file'
+        input.accept = '.ca'
+        input.onchange = async () => {
+            const file = input.files[0]
+            const buffer = await file.arrayBuffer()
+            const decompressed = await decompress(buffer)
+            console.log(decompressed)
+        }
+        input.click()
     },
 
     show_help() {
@@ -113,8 +165,7 @@ const game = {
 }
 
 addEventListener("DOMContentLoaded", async () => {
-    const browser_compatability = check_browser_compatability()
-    console.info(browser_compatability)
+    check_browser_compatability()
 
     await wasm_ready
 
