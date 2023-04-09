@@ -426,7 +426,9 @@ fn init_game_def() {
         game.day += 1
     }));
 
-    game_def.add_handler("init", Box::new(move |game, _msg| {
+    game_def.add_handler("init", Box::new(move |game, msg| {
+        game.rand_state = msg["rand_seed"].as_u64().unwrap() as _;
+
         game.post_message_front(json!({
             "event": "init",
     
@@ -1122,6 +1124,8 @@ struct Game {
     rand_state: u32,
     message_queue: Vec<JsonValue>,
 
+    history: Vec<JsonValue>,
+
     day: u32,
     resources: Vec<ExpNum>,
     buildings: Vec<BTreeMap<String, BuildingProperty>>,
@@ -1130,10 +1134,12 @@ struct Game {
 }
 
 impl Game {
-    fn new(rand_state: u32) -> Game {
+    fn new() -> Game {
         Game {
-            rand_state,
+            rand_state: 393939,
             message_queue: vec![],
+
+            history: vec![],
 
             day: 0,
             resources: game_def!().resources.iter().map(|_| ExpNum::from(0.)).collect(),
@@ -1199,7 +1205,18 @@ impl Game {
                 (k.to_string(), v.to_json())
             }).collect::<BTreeMap<String, JsonValue>>()
         }));
-    }    
+    }
+
+    fn fast_forward(&mut self, events: Vec<JsonValue>, max_days: u32) {
+        self.history.extend(events.clone());
+        for event in events {
+            self.dispatch_message(event);
+            self.message_queue.clear();
+            if self.day >= max_days {
+                break;
+            }
+        }
+    }
 }
 
 impl Index<ResourceId> for Game {
@@ -1261,12 +1278,37 @@ unsafe extern fn free_json_buffer() {
 }
 
 #[no_mangle]
-unsafe extern fn game_new(rand_seed: u32) -> *mut Game {
+unsafe extern fn game_new() -> *mut Game {
     if !GAME_DEF.is_initialized() {
         init_game_def()
     }
 
-    Box::into_raw(Box::new(Game::new(rand_seed)))
+    Box::into_raw(Box::new(Game::new()))
+}
+
+#[no_mangle]
+unsafe extern fn game_export(game: *mut Game) {
+    let game = &mut *game;
+    write_json_buffer(json!(game.history))
+}
+
+#[no_mangle]
+unsafe extern fn game_load(game: *mut Game) {
+    let game = &mut *game;
+    assert!(game.history.is_empty());
+    if let Ok(history) = read_json_buffer() {
+        game.fast_forward(history.as_array().unwrap().clone(), u32::MAX);
+    } else {
+        game.post_bug("failed to parse json");
+    }
+}
+
+#[no_mangle]
+unsafe extern fn game_timewarp(game: *mut Game, day: u32) {
+    let game = &mut *game;
+    let history = std::mem::take(&mut game.history);
+    *game = Game::new();
+    game.fast_forward(history, day);
 }
 
 #[no_mangle]
@@ -1279,6 +1321,8 @@ unsafe extern fn poll(game: *mut Game) {
     let game = &mut *game;
 
     if let Ok(event) = read_json_buffer() {
+        game.history.push(event.clone());
+
         game.dispatch_message(event);
         game.post_status();
         game.post_resources();
@@ -1296,8 +1340,8 @@ mod test_game {
     #[test]
     fn test_1() {
         init_game_def();
-        let mut game = Game::new(0);
-        game.dispatch_message(json!({ "event": "init" }));
+        let mut game = Game::new();
+        game.dispatch_message(json!({ "event": "init", "rand_seed": 393939 }));
         eprintln!("{:?}", game.resources);
         game.dispatch_message(json!({ "event": "step" }));
         eprintln!("{:?}", game.resources);
