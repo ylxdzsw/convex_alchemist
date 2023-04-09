@@ -24,10 +24,10 @@ window.ca = x.instance.exports
 [require](main.less)
 [require](main.js)
 
-[require](Card.html)
+[require](Text.html)
 [require](Katex.html)
 [require](Resource.html)
-[require](Text.html)
+[require](Card.html)
 
 <div class="column">
 
