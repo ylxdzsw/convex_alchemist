@@ -37,11 +37,11 @@
     let status = 'paused' // 'playing', 'paused', 'to_pause'
     let last_time = 0 // in miliseconds timestamp
 
-    function auto_play() {
+    async function auto_play() {
         switch (status) {
             case 'playing':
                 last_time = Date.now()
-                game.step()
+                await game.step()
                 break
             case 'paused':
                 throw new Error('bug')
@@ -63,8 +63,8 @@
         setTimeout(auto_play, delta)
     }
 
-    document.querySelector('#status-speed-control-step').addEventListener('click', () => {
-        game.step()
+    document.querySelector('#status-speed-control-step').addEventListener('click', async () => {
+        await game.step()
         if (status === 'playing')
             status = 'to_pause'
     })
