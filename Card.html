@@ -30,13 +30,11 @@
             super()
             const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
             this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
-            customElements.upgrade(this)
         }
 
         connectedCallback() {
             for (const attr of this.attributes) if (attr.name.startsWith('data-title-'))
                 this.shadowRoot.querySelector('ca-text').dataset[attr.name.slice(11)] = attr.value
-            this.shadowRoot.querySelector('ca-text').render()
         }
     })
 </script>

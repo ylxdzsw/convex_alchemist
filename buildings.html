@@ -116,13 +116,11 @@
             super()
             const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
             this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
-            customElements.upgrade(this)
         }
 
         connectedCallback() {
             for (const [lang, display_name] of Object.entries(this.display_name))
                 this.shadowRoot.querySelector('.header .name').dataset[lang] = display_name
-            this.shadowRoot.querySelector('.header .name').render()
 
             game.on(`${this.name}.income`, this.income_callback = e => {
                 let str = ''
@@ -146,7 +144,6 @@
                 if (e.properties.level !== undefined) {
                     this.shadowRoot.querySelector('.header .level').dataset.zh = `（${e.properties.level[1]}级）`
                     this.shadowRoot.querySelector('.header .level').dataset.en = ` (Level ${e.properties.level[1]}) `
-                    this.shadowRoot.querySelector('.header .level').render()
 
                     this.classList.toggle('max-level', e.properties.level[1] >= this.max_level ?? Infinity)
                 }
@@ -218,7 +215,6 @@
             super()
             const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
             this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
-            customElements.upgrade(this)
 
             this.shadowRoot.querySelector('slot').addEventListener('slotchange', e => {
                 const building_name = this.getRootNode().host.name
