@@ -26,7 +26,9 @@
         }
 
         connectedCallback() {
-            this.shadowRoot.querySelector('.name').set_content(this.display_name)
+            for (const [lang, content] of Object.entries(this.display_name))
+                this.shadowRoot.querySelector('.name').dataset[lang] = content
+            this.shadowRoot.querySelector('.name').render?.()
 
             game.on(`resources`, this.resource_update_callback = e => {
                 this.shadowRoot.querySelector('.amount').innerHTML = e.resources[this.name]
