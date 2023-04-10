@@ -198,6 +198,8 @@
             game.on('reset', this.reset = e => {
                 this.classList.remove('unlocked', 'built', 'enabled', 'expanded', 'max-level')
                 this.shadowRoot.querySelector('.header .income').innerHTML = ''
+                for (const lang in this.shadowRoot.querySelector('.header .level').dataset)
+                    this.shadowRoot.querySelector('.header .level').dataset[lang] = ''
             })
         }
     })
@@ -253,7 +255,7 @@
 
 <ca-card
     id="building-card"
-    data-title-zh="建築"
+    data-title-zh="建筑"
     data-title-en="Buildings"
 >
 

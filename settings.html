@@ -3,9 +3,26 @@
     data-title-zh="选项"
     data-title-en="Settings"
 >
+<div>
 <button id="settings-export"><ca-text data-en="Export Save File" data-zh="导出存档"></ca-text></button>
 <button id="settings-import"><ca-text data-en="Import Save File" data-zh="导入存档"></ca-text></button>
+</div>
+
+<div style="margin-top: .4rem">
+<ca-text data-en="Number Format: " data-zh="数字格式："></ca-text>
+<button id="settings-number-format-e">ℯ<sup>23.314</sup></button>
+<button id="settings-number-format-10">3.14×10<sup>233</sup></button>
+<button id="settings-number-format-a">3.14cc</button>
+</div>
+
 </ca-card>
+
+<style>
+    #settings-card {
+        display: flex;
+        flex-direction: column;
+    }
+</style>
 
 <script type="module">
     document.querySelector("#settings-export").addEventListener('click', () => {
@@ -14,5 +31,26 @@
 
     document.querySelector("#settings-import").addEventListener('click', () => {
         game.import()
+    })
+
+    function set_number_format(format) {
+        game.pool_with_message({
+            event: "format_preference",
+            format_preference: format
+        })
+        for (const building of document.querySelectorAll('ca-building.expanded'))
+            game.pool_with_message({event: `${building.name}.detail`})
+    }
+
+    document.querySelector("#settings-number-format-e").addEventListener('click', () => {
+        set_number_format(["e", "d", "d", "e", "e", "ee"])
+    })
+
+    document.querySelector("#settings-number-format-10").addEventListener('click', () => {
+        set_number_format(["e", "d", "d", "10", "10", "ee"])
+    })
+
+    document.querySelector("#settings-number-format-a").addEventListener('click', () => {
+        set_number_format(["e", "d", "d", "a", "e", "ee"])
     })
 </script>

@@ -446,11 +446,9 @@ fn init_game_def() {
         }));
     }));
 
-    game_def.add_handler("format_preference.update", Box::new(move |game, msg| {
+    game_def.add_handler("format_preference", Box::new(move |game, msg| {
         game.format_preference = msg["format_preference"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
-        game.dispatch_message(json!({
-            "event": "format_preference.updated"
-        }));
+        game.post_resources();
     }));
 
     let resource_man_id = ResourceId(game_def.resources.len());
@@ -467,7 +465,7 @@ fn init_game_def() {
         name: "metal",
         display_name: json!({
             "en": "Metal",
-            "zh": "金元素",
+            "zh": "金",
         })
     });
 
@@ -476,7 +474,7 @@ fn init_game_def() {
         name: "wood",
         display_name: json!({
             "en": "Wood",
-            "zh": "木元素",
+            "zh": "木",
         })
     });
 
@@ -485,7 +483,7 @@ fn init_game_def() {
         name: "water",
         display_name: json!({
             "en": "Water",
-            "zh": "水元素",
+            "zh": "水",
         })
     });
 
@@ -494,7 +492,7 @@ fn init_game_def() {
         name: "fire",
         display_name: json!({
             "en": "Fire",
-            "zh": "火元素",
+            "zh": "火",
         })
     });
 
@@ -503,7 +501,7 @@ fn init_game_def() {
         name: "earth",
         display_name: json!({
             "en": "Earth",
-            "zh": "土元素",
+            "zh": "土",
         })
     });
 
@@ -903,8 +901,8 @@ fn init_game_def() {
                 "zh": r#""#,
             },
             "product": {
-                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{Water}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{Earth}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
-                "zh": r#"<ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{水}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{土}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{Water}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex style="line-height: 2">2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{Earth}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+                "zh": r#"<ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{水}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex style="line-height: 2">2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{土}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
             }
         })
     },
@@ -987,7 +985,7 @@ fn init_game_def() {
     // upgrade cost
     Rc::new(move |game| {
         let level = game[building_campfire_id]["level"].as_int();
-        vec![(resource_man_id, ExpNum::from(2.).pow(level+10))]
+        vec![(resource_man_id, ExpNum::from(2.).pow(level+8))]
     }),
     // build cost
     Rc::new(move |_| vec![(resource_man_id, ExpNum::from(10000.))]));
@@ -1450,7 +1448,7 @@ unsafe extern fn poll(game: *mut Game) {
     let game = &mut *game;
 
     if let Ok(event) = read_json_buffer() {
-        if !event["event"].as_str().unwrap().ends_with(".detail") { // TODO
+        if !event["event"].as_str().unwrap().ends_with(".detail") { // TODO: format_preference?
             game.history.push(event.clone());
         }
 

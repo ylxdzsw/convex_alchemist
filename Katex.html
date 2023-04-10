@@ -22,7 +22,7 @@
 
         render_katex(code) {
             if (this.hasAttribute('display'))
-                this.shadowRoot.querySelector("div").style.display = 'block'
+                this.shadowRoot.querySelector("div").style.display = 'inline-block'
             else
                 this.shadowRoot.querySelector("div").style.display = 'inline'
 
