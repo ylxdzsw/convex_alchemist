@@ -158,6 +158,7 @@ impl std::ops::Add for ExpNum {
     }
 }
 
+    
 impl std::ops::Sub for ExpNum {
     type Output = Self;
 
@@ -313,6 +314,7 @@ struct Building {
     name: &'static str,
     display_name: JsonValue,
     max_level: u32,
+    stochastic: bool,
     detail: JsonValue
 }
 
@@ -505,21 +507,21 @@ fn init_game_def() {
         })
     });
 
-    let resource_yin_id = ResourceId(game_def.resources.len());
-    game_def.resources.push(Resource {
-        name: "yin",
-        display_name: json!({
-            "en": "Yin Qi",
-            "zh": "阴气",
-        })
-    });
-
     let resource_yang_id = ResourceId(game_def.resources.len());
     game_def.resources.push(Resource {
         name: "yang",
         display_name: json!({
-            "en": "Yang Qi",
-            "zh": "阳气",
+            "en": "Yang", // or Light & Dark?
+            "zh": "阳",
+        })
+    });
+
+    let resource_yin_id = ResourceId(game_def.resources.len());
+    game_def.resources.push(Resource {
+        name: "yin",
+        display_name: json!({
+            "en": "Yin",
+            "zh": "阴",
         })
     });
 
@@ -528,12 +530,13 @@ fn init_game_def() {
         game_def: &mut GameDef,
         building: Building,
         cost_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>,
-        product_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>,
+        product_fun: Rc<dyn Fn(&mut Game) -> Vec<(ResourceId, ExpNum)>>, // it need to be mutable because it may change the random state
         upgrade_cost_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>,
         build_cost_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>
     ) -> BuildingId {
         let name = building.name;
         let max_level = building.max_level;
+        let stochastic = building.stochastic;
 
         let id = BuildingId(game_def.buildings.len());
         game_def.buildings.push(building);
@@ -732,10 +735,12 @@ fn init_game_def() {
                         message["cost"][name] = json!([amount, sufficient]);
                     }
 
-                    for (resource_id, amount) in product_fun(game) {
-                        let name = game_def!(resource_id).name;
-                        let amount = amount.format_with_preference(&game.format_preference, "html");
-                        message["product"][name] = json!([amount, true]);
+                    if !stochastic {
+                        for (resource_id, amount) in product_fun(game) {
+                            let name = game_def!(resource_id).name;
+                            let amount = amount.format_with_preference(&game.format_preference, "html");
+                            message["product"][name] = json!([amount, true]);
+                        }
                     }
 
                     if game[id]["level"].as_int() < max_level {
@@ -771,6 +776,7 @@ fn init_game_def() {
             "zh": "帐篷",
         }),
         max_level: 10,
+        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"A tent. Generates <ca-resource>man</ca-resource>."#,
@@ -827,6 +833,7 @@ fn init_game_def() {
             "zh": "森林",
         }),
         max_level: 65536,
+        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"A forest. Excessive <ca-resource>man</ca-resource> reduces <ca-resource>wood</ca-resource> production."#,
@@ -891,6 +898,7 @@ fn init_game_def() {
             "zh": "沼泽",
         }),
         max_level: 65536,
+        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"Generates <ca-resource>water</ca-resource> and <ca-resource>earth</ca-resource> based on thier ratio."#,
@@ -927,8 +935,8 @@ fn init_game_def() {
     Rc::new(move |game| {
         let level = game[building_swamp_id]["level"].as_int();
         vec![
-            (resource_water_id, ExpNum::from(2.3).pow(level+10)),
-            (resource_earth_id, ExpNum::from(2.3).pow(level+10)),
+            (resource_water_id, ExpNum::from(2.4).pow(level+9)),
+            (resource_earth_id, ExpNum::from(2.4).pow(level+9)),
         ]
     }),
     // build cost
@@ -957,6 +965,7 @@ fn init_game_def() {
             "zh": "营火",
         }),
         max_level: 65536,
+        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"Consumes <ca-resource>wood</ca-resource> to produce <ca-resource>fire</ca-resource>"#,
@@ -1011,6 +1020,7 @@ fn init_game_def() {
             "zh": "矿",
         }),
         max_level: 65536,
+        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"Get <ca-resource>metal</ca-resource> with <ca-resource>man</ca-resource>"#,
@@ -1065,6 +1075,7 @@ fn init_game_def() {
             "zh": "田",
         }),
         max_level: 65536,
+        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"A Farm"#,
@@ -1125,6 +1136,7 @@ fn init_game_def() {
             "zh": "核反应堆",
         }),
         max_level: 65536,
+        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"That's how the sun work."#,
@@ -1181,6 +1193,7 @@ fn init_game_def() {
             "zh": "冶炼厂",
         }),
         max_level: 65536,
+        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"A smelter."#,
@@ -1229,6 +1242,110 @@ fn init_game_def() {
         }
         game[building_smelter_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
         game.post_building_properties(building_smelter_id);
+    }));
+
+
+    let building_compositor_id = BuildingId(game_def.buildings.len());
+    add_building(game_def, Building {
+        name: "compositor",
+        display_name: json!({
+            "en": "Body Compositor",
+            "zh": "人体炼成阵",
+        }),
+        max_level: 49,
+        stochastic: true,
+        detail: json!({
+            "description": {
+                "en": r#"Composite Man Power out of thin air."#,
+                "zh": r#"炼成人体"#,
+            },
+            "cost": {
+                "en": r#""#,
+                "zh": r#""#,
+            },
+            "product": {
+                "en": r#"<ca-katex>(50 + \text{{level}})\%</ca-katex> chance: <ca-katex>\text{{Yang}}</ca-katex> <ca-resource>man</ca-resource><br><ca-katex>(50 - \text{{level}})\%</ca-katex> chance: <ca-katex>\text{{Yang}}</ca-katex> <ca-resource>yin</ca-resource>"#,
+                "zh": r#"<ca-katex>(50 + \text{{\footnotesize 等级}})\%</ca-katex>几率：<ca-katex>\text{{\footnotesize 阳}}</ca-katex> <ca-resource>man</ca-resource><br><ca-katex>(50 - \text{{\footnotesize 等级}})\%</ca-katex>几率：<ca-katex>\text{{\footnotesize 阳}}</ca-katex> <ca-resource>yin</ca-resource>"#,
+            }
+        })
+    },
+    // cost
+    Rc::new(move |_| vec![]),
+    // product
+    Rc::new(move |game| {
+        let level = game[building_compositor_id]["level"].as_int();
+        let cutoff = (50 + level) as f64 / 100.;
+        let yang = game[resource_yang_id];
+
+        if game.rand() < cutoff {
+            vec![(resource_man_id, yang)]
+        } else {
+            vec![(resource_yin_id, yang)]
+        }
+    }),
+    // upgrade cost
+    Rc::new(move |game| {
+        let level = game[building_compositor_id]["level"].as_int();
+        vec![(resource_yang_id, ExpNum::from(level as f64 + 10.).pow(2.))]
+    }),
+    // build cost
+    Rc::new(move |_| vec![(resource_yang_id, ExpNum::from(10.).pow(2.))]));
+
+    game_def.add_handler("nuke.built", Box::new(move |game, _msg| {
+        if game[building_compositor_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+            return;
+        }
+        game[building_compositor_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+        game.post_building_properties(building_compositor_id);
+    }));
+
+
+    let building_blackaltar_id = BuildingId(game_def.buildings.len());
+    add_building(game_def, Building {
+        name: "blackaltar",
+        display_name: json!({
+            "en": "Black Water Altar",
+            "zh": "黑水祭坛",
+        }),
+        max_level: 400,
+        stochastic: false,
+        detail: json!({
+            "description": {
+                "en": r#"A dark altar."#,
+                "zh": r#"漆黑的祭坛，有水不断流出。"#,
+            },
+            "cost": {
+                "en": r#""#,
+                "zh": r#""#,
+            },
+            "product": {
+                "en": r#"<ca-katex>\text{{Yin}} ^ {{1 + 0.01 \times \text{{level}}}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource>"#,
+                "zh": r#"<ca-katex>\text{{\footnotesize 阴}} ^ {{1 + 0.01 \times \text{{\tiny 等级}}}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource>"#,
+            }
+        })
+    },
+    // cost
+    Rc::new(move |_| vec![]),
+    // product
+    Rc::new(move |game| {
+        let level = game[building_blackaltar_id]["level"].as_int();
+        let yin = game[resource_yin_id];
+        vec![(resource_water_id, yin.pow(1. + 0.01 * level as f64))]
+    }),
+    // upgrade cost
+    Rc::new(move |game| {
+        let level = game[building_blackaltar_id]["level"].as_int();
+        vec![(resource_yin_id, ExpNum::from(2.).pow(level as f64 + 4.4))]
+    }),
+    // build cost
+    Rc::new(move |_| vec![(resource_yin_id, ExpNum::from(4444.))]));
+
+    game_def.add_handler("compositor.built", Box::new(move |game, _msg| {
+        if game[building_blackaltar_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+            return;
+        }
+        game[building_blackaltar_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+        game.post_building_properties(building_blackaltar_id);
     }));
 
 
