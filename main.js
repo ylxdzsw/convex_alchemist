@@ -129,7 +129,7 @@ const game = {
     init_game() {
         if (game.ptr) throw new Error('game already initialized')
         game.ptr = ca.game_new()
-        game.pool_with_message({event: 'init', rand_seed: 1145141919})
+        game.pool_with_message({event: 'init'})
         game.log({
             zh: `游戏初始化完成。`,
             en: `Game initialized.`

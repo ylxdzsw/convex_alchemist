@@ -153,14 +153,11 @@
             })
 
             const detail = this.shadowRoot.querySelector('.detail')
-            game.on('config.lang', detail.lang_callback = e => {
-                detail.querySelector('.description').innerHTML = this.detail.description[e.lang] ?? this.detail.description['zh']
-                detail.querySelector('.cost .content').innerHTML = this.detail.cost[e.lang] ?? this.detail.cost['zh']
-                if (detail.querySelector('.cost .content').innerHTML.trim() == '')
-                    detail.querySelector('.cost').style.display = 'none'
-                detail.querySelector('.product .content').innerHTML = this.detail.product[e.lang] ?? this.detail.product['zh']
-            })
-            detail.lang_callback({lang: game.lang})
+            detail.querySelector('.description').innerHTML = this.detail.description[game.lang] ?? this.detail.description['zh']
+            detail.querySelector('.cost .content').innerHTML = this.detail.cost[game.lang] ?? this.detail.cost['zh']
+            if (detail.querySelector('.cost .content').innerHTML.trim() == '')
+                detail.querySelector('.cost').style.display = 'none'
+            detail.querySelector('.product .content').innerHTML = this.detail.product[game.lang] ?? this.detail.product['zh']
 
             this.shadowRoot.querySelector('.header').addEventListener('click', e => {
                 game.pool_with_message({event: `${this.name}.detail`})
@@ -231,7 +228,7 @@
                             if (content != '') content += '<br>'
                             content += `${amount} <ca-resource>${resource}</ca-resource>`
                         }
-                        if (content === '') {
+                        if (content == '') {
                             switch (game.lang) {
                                 case 'en':
                                     content = 'Free'

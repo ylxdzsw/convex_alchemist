@@ -35,7 +35,6 @@ impl ExpNum {
     }
 
     // Somehow behave strangely when 0 is involved, so special case them
-
     fn zero() -> Self {
         Self(f64::NEG_INFINITY)
     }
@@ -314,7 +313,6 @@ struct Building {
     name: &'static str,
     display_name: JsonValue,
     max_level: u32,
-    stochastic: bool,
     detail: JsonValue
 }
 
@@ -428,9 +426,7 @@ fn init_game_def() {
         game.day += 1
     }));
 
-    game_def.add_handler("init", Box::new(move |game, msg| {
-        game.rand_state = msg["rand_seed"].as_u64().unwrap() as _;
-
+    game_def.add_handler("init", Box::new(move |game, _msg| {
         game.post_message_front(json!({
             "event": "init",
     
@@ -457,7 +453,7 @@ fn init_game_def() {
     game_def.resources.push(Resource {
         name: "man",
         display_name: json!({
-            "en": "Man Power",
+            "en": "Manpower",
             "zh": "人力",
         })
     });
@@ -530,13 +526,12 @@ fn init_game_def() {
         game_def: &mut GameDef,
         building: Building,
         cost_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>,
-        product_fun: Rc<dyn Fn(&mut Game) -> Vec<(ResourceId, ExpNum)>>, // it need to be mutable because it may change the random state
+        product_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>,
         upgrade_cost_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>,
         build_cost_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>
     ) -> BuildingId {
         let name = building.name;
         let max_level = building.max_level;
-        let stochastic = building.stochastic;
 
         let id = BuildingId(game_def.buildings.len());
         game_def.buildings.push(building);
@@ -735,12 +730,10 @@ fn init_game_def() {
                         message["cost"][name] = json!([amount, sufficient]);
                     }
 
-                    if !stochastic {
-                        for (resource_id, amount) in product_fun(game) {
-                            let name = game_def!(resource_id).name;
-                            let amount = amount.format_with_preference(&game.format_preference, "html");
-                            message["product"][name] = json!([amount, true]);
-                        }
+                    for (resource_id, amount) in product_fun(game) {
+                        let name = game_def!(resource_id).name;
+                        let amount = amount.format_with_preference(&game.format_preference, "html");
+                        message["product"][name] = json!([amount, true]);
                     }
 
                     if game[id]["level"].as_int() < max_level {
@@ -776,7 +769,6 @@ fn init_game_def() {
             "zh": "帐篷",
         }),
         max_level: 10,
-        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"A tent. Generates <ca-resource>man</ca-resource>."#,
@@ -833,7 +825,6 @@ fn init_game_def() {
             "zh": "森林",
         }),
         max_level: 65536,
-        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"A forest. Excessive <ca-resource>man</ca-resource> reduces <ca-resource>wood</ca-resource> production."#,
@@ -844,7 +835,7 @@ fn init_game_def() {
                 "zh": r#""#,
             },
             "product": {
-                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} - \text{{MP}} ^ {{0.8}}</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource>"#,
+                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} - \text{{Manpower}} ^ {{0.8}}</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource>"#,
                 "zh": r#"<ca-katex>2 ^ {{\text{{\tiny 等级}} + 10}} - \text{{\footnotesize 人力}} ^ {{0.8}}</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource>"#,
             }
         })
@@ -898,7 +889,6 @@ fn init_game_def() {
             "zh": "沼泽",
         }),
         max_level: 65536,
-        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"Generates <ca-resource>water</ca-resource> and <ca-resource>earth</ca-resource> based on thier ratio."#,
@@ -965,7 +955,6 @@ fn init_game_def() {
             "zh": "营火",
         }),
         max_level: 65536,
-        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"Consumes <ca-resource>wood</ca-resource> to produce <ca-resource>fire</ca-resource>"#,
@@ -1020,7 +1009,6 @@ fn init_game_def() {
             "zh": "矿",
         }),
         max_level: 65536,
-        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"Get <ca-resource>metal</ca-resource> with <ca-resource>man</ca-resource>"#,
@@ -1075,7 +1063,6 @@ fn init_game_def() {
             "zh": "田",
         }),
         max_level: 65536,
-        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"A Farm"#,
@@ -1136,7 +1123,6 @@ fn init_game_def() {
             "zh": "核反应堆",
         }),
         max_level: 65536,
-        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"That's how the sun work."#,
@@ -1193,7 +1179,6 @@ fn init_game_def() {
             "zh": "冶炼厂",
         }),
         max_level: 65536,
-        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"A smelter."#,
@@ -1253,10 +1238,9 @@ fn init_game_def() {
             "zh": "人体炼成阵",
         }),
         max_level: 49,
-        stochastic: true,
         detail: json!({
             "description": {
-                "en": r#"Composite Man Power out of thin air."#,
+                "en": r#"Composite Manpower out of thin air."#,
                 "zh": r#"炼成人体"#,
             },
             "cost": {
@@ -1277,7 +1261,7 @@ fn init_game_def() {
         let cutoff = (50 + level) as f64 / 100.;
         let yang = game[resource_yang_id];
 
-        if game.rand() < cutoff {
+        if game.rand("compositor") < cutoff {
             vec![(resource_man_id, yang)]
         } else {
             vec![(resource_yin_id, yang)]
@@ -1308,7 +1292,6 @@ fn init_game_def() {
             "zh": "黑水祭坛",
         }),
         max_level: 400,
-        stochastic: false,
         detail: json!({
             "description": {
                 "en": r#"A dark altar."#,
@@ -1353,10 +1336,8 @@ fn init_game_def() {
 
 
 struct Game {
-    rand_state: u32,
-    message_queue: Vec<JsonValue>,
-
     history: Vec<JsonValue>,
+    message_queue: Vec<JsonValue>,
 
     day: u32,
     resources: Vec<ExpNum>,
@@ -1368,10 +1349,8 @@ struct Game {
 impl Game {
     fn new() -> Game {
         Game {
-            rand_state: 393939,
-            message_queue: vec![],
-
             history: vec![],
+            message_queue: vec![],
 
             day: 0,
             resources: game_def!().resources.iter().map(|_| ExpNum::from(0.)).collect(),
@@ -1381,15 +1360,19 @@ impl Game {
         }
     }
 
-    fn get_random_u32(&mut self) -> u32 {
-        self.rand_state ^= self.rand_state << 13;
-        self.rand_state ^= self.rand_state >> 17;
-        self.rand_state ^= self.rand_state << 5;
-        self.rand_state
-    }
-
-    fn rand(&mut self) -> f64 {
-        (self.get_random_u32() % 1000000) as f64 / 1000000.
+    fn rand(&self, salt: &str) -> f64 {
+        // TODO: pre-compute the salt if needed
+        let bytes: [u8; 4] = unsafe { std::mem::transmute(self.day) };
+        let mut state = 0x811c9dc5_u32;
+        for b in bytes.into_iter() {
+            state = state.wrapping_mul(0x01000193);
+            state ^= b as u32;
+        }
+        for b in salt.bytes() {
+            state = state.wrapping_mul(0x01000193);
+            state ^= b as u32;
+        }
+        (state % 1000000) as f64 / 1000000.
     }
 
     fn post_message_front(&mut self, message: JsonValue) {
@@ -1587,7 +1570,7 @@ mod test_game {
     fn test_1() {
         init_game_def();
         let mut game = Game::new();
-        game.dispatch_message(json!({ "event": "init", "rand_seed": 393939 }));
+        game.dispatch_message(json!({ "event": "init" }));
         eprintln!("{:?}", game.resources);
         game.dispatch_message(json!({ "event": "step" }));
         eprintln!("{:?}", game.resources);
