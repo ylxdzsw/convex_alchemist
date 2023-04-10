@@ -35,7 +35,6 @@ impl ExpNum {
     }
 
     // Somehow behave strangely when 0 is involved, so special case them
-
     fn zero() -> Self {
         Self(f64::NEG_INFINITY)
     }
@@ -158,6 +157,7 @@ impl std::ops::Add for ExpNum {
     }
 }
 
+    
 impl std::ops::Sub for ExpNum {
     type Output = Self;
 
@@ -426,9 +426,7 @@ fn init_game_def() {
         game.day += 1
     }));
 
-    game_def.add_handler("init", Box::new(move |game, msg| {
-        game.rand_state = msg["rand_seed"].as_u64().unwrap() as _;
-
+    game_def.add_handler("init", Box::new(move |game, _msg| {
         game.post_message_front(json!({
             "event": "init",
     
@@ -446,18 +444,16 @@ fn init_game_def() {
         }));
     }));
 
-    game_def.add_handler("format_preference.update", Box::new(move |game, msg| {
+    game_def.add_handler("format_preference", Box::new(move |game, msg| {
         game.format_preference = msg["format_preference"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
-        game.dispatch_message(json!({
-            "event": "format_preference.updated"
-        }));
+        game.post_resources();
     }));
 
     let resource_man_id = ResourceId(game_def.resources.len());
     game_def.resources.push(Resource {
         name: "man",
         display_name: json!({
-            "en": "Man Power",
+            "en": "Manpower",
             "zh": "人力",
         })
     });
@@ -467,7 +463,7 @@ fn init_game_def() {
         name: "metal",
         display_name: json!({
             "en": "Metal",
-            "zh": "金元素",
+            "zh": "金",
         })
     });
 
@@ -476,7 +472,7 @@ fn init_game_def() {
         name: "wood",
         display_name: json!({
             "en": "Wood",
-            "zh": "木元素",
+            "zh": "木",
         })
     });
 
@@ -485,7 +481,7 @@ fn init_game_def() {
         name: "water",
         display_name: json!({
             "en": "Water",
-            "zh": "水元素",
+            "zh": "水",
         })
     });
 
@@ -494,7 +490,7 @@ fn init_game_def() {
         name: "fire",
         display_name: json!({
             "en": "Fire",
-            "zh": "火元素",
+            "zh": "火",
         })
     });
 
@@ -503,16 +499,7 @@ fn init_game_def() {
         name: "earth",
         display_name: json!({
             "en": "Earth",
-            "zh": "土元素",
-        })
-    });
-
-    let resource_yin_id = ResourceId(game_def.resources.len());
-    game_def.resources.push(Resource {
-        name: "yin",
-        display_name: json!({
-            "en": "Yin Qi",
-            "zh": "阴气",
+            "zh": "土",
         })
     });
 
@@ -520,8 +507,17 @@ fn init_game_def() {
     game_def.resources.push(Resource {
         name: "yang",
         display_name: json!({
-            "en": "Yang Qi",
-            "zh": "阳气",
+            "en": "Yang", // or Light & Dark?
+            "zh": "阳",
+        })
+    });
+
+    let resource_yin_id = ResourceId(game_def.resources.len());
+    game_def.resources.push(Resource {
+        name: "yin",
+        display_name: json!({
+            "en": "Yin",
+            "zh": "阴",
         })
     });
 
@@ -839,7 +835,7 @@ fn init_game_def() {
                 "zh": r#""#,
             },
             "product": {
-                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} - \text{{MP}} ^ {{0.8}}</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource>"#,
+                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 10}} - \text{{Manpower}} ^ {{0.8}}</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource>"#,
                 "zh": r#"<ca-katex>2 ^ {{\text{{\tiny 等级}} + 10}} - \text{{\footnotesize 人力}} ^ {{0.8}}</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource>"#,
             }
         })
@@ -903,8 +899,8 @@ fn init_game_def() {
                 "zh": r#""#,
             },
             "product": {
-                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{Water}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{Earth}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
-                "zh": r#"<ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{水}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{土}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{Water}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex style="line-height: 2">2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{Earth}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+                "zh": r#"<ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{水}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex style="line-height: 2">2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{土}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
             }
         })
     },
@@ -929,8 +925,8 @@ fn init_game_def() {
     Rc::new(move |game| {
         let level = game[building_swamp_id]["level"].as_int();
         vec![
-            (resource_water_id, ExpNum::from(2.3).pow(level+10)),
-            (resource_earth_id, ExpNum::from(2.3).pow(level+10)),
+            (resource_water_id, ExpNum::from(2.4).pow(level+9)),
+            (resource_earth_id, ExpNum::from(2.4).pow(level+9)),
         ]
     }),
     // build cost
@@ -987,7 +983,7 @@ fn init_game_def() {
     // upgrade cost
     Rc::new(move |game| {
         let level = game[building_campfire_id]["level"].as_int();
-        vec![(resource_man_id, ExpNum::from(2.).pow(level+10))]
+        vec![(resource_man_id, ExpNum::from(2.).pow(level+8))]
     }),
     // build cost
     Rc::new(move |_| vec![(resource_man_id, ExpNum::from(10000.))]));
@@ -1234,14 +1230,114 @@ fn init_game_def() {
     }));
 
 
+    let building_compositor_id = BuildingId(game_def.buildings.len());
+    add_building(game_def, Building {
+        name: "compositor",
+        display_name: json!({
+            "en": "Body Compositor",
+            "zh": "人体炼成阵",
+        }),
+        max_level: 49,
+        detail: json!({
+            "description": {
+                "en": r#"Composite Manpower out of thin air."#,
+                "zh": r#"炼成人体"#,
+            },
+            "cost": {
+                "en": r#""#,
+                "zh": r#""#,
+            },
+            "product": {
+                "en": r#"<ca-katex>(50 + \text{{level}})\%</ca-katex> chance: <ca-katex>\text{{Yang}}</ca-katex> <ca-resource>man</ca-resource><br><ca-katex>(50 - \text{{level}})\%</ca-katex> chance: <ca-katex>\text{{Yang}}</ca-katex> <ca-resource>yin</ca-resource>"#,
+                "zh": r#"<ca-katex>(50 + \text{{\footnotesize 等级}})\%</ca-katex>几率：<ca-katex>\text{{\footnotesize 阳}}</ca-katex> <ca-resource>man</ca-resource><br><ca-katex>(50 - \text{{\footnotesize 等级}})\%</ca-katex>几率：<ca-katex>\text{{\footnotesize 阳}}</ca-katex> <ca-resource>yin</ca-resource>"#,
+            }
+        })
+    },
+    // cost
+    Rc::new(move |_| vec![]),
+    // product
+    Rc::new(move |game| {
+        let level = game[building_compositor_id]["level"].as_int();
+        let cutoff = (50 + level) as f64 / 100.;
+        let yang = game[resource_yang_id];
+
+        if game.rand("compositor") < cutoff {
+            vec![(resource_man_id, yang)]
+        } else {
+            vec![(resource_yin_id, yang)]
+        }
+    }),
+    // upgrade cost
+    Rc::new(move |game| {
+        let level = game[building_compositor_id]["level"].as_int();
+        vec![(resource_yang_id, ExpNum::from(level as f64 + 10.).pow(2.))]
+    }),
+    // build cost
+    Rc::new(move |_| vec![(resource_yang_id, ExpNum::from(10.).pow(2.))]));
+
+    game_def.add_handler("nuke.built", Box::new(move |game, _msg| {
+        if game[building_compositor_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+            return;
+        }
+        game[building_compositor_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+        game.post_building_properties(building_compositor_id);
+    }));
+
+
+    let building_blackaltar_id = BuildingId(game_def.buildings.len());
+    add_building(game_def, Building {
+        name: "blackaltar",
+        display_name: json!({
+            "en": "Black Water Altar",
+            "zh": "黑水祭坛",
+        }),
+        max_level: 400,
+        detail: json!({
+            "description": {
+                "en": r#"A dark altar."#,
+                "zh": r#"漆黑的祭坛，有水不断流出。"#,
+            },
+            "cost": {
+                "en": r#""#,
+                "zh": r#""#,
+            },
+            "product": {
+                "en": r#"<ca-katex>\text{{Yin}} ^ {{1 + 0.01 \times \text{{level}}}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource>"#,
+                "zh": r#"<ca-katex>\text{{\footnotesize 阴}} ^ {{1 + 0.01 \times \text{{\tiny 等级}}}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource>"#,
+            }
+        })
+    },
+    // cost
+    Rc::new(move |_| vec![]),
+    // product
+    Rc::new(move |game| {
+        let level = game[building_blackaltar_id]["level"].as_int();
+        let yin = game[resource_yin_id];
+        vec![(resource_water_id, yin.pow(1. + 0.01 * level as f64))]
+    }),
+    // upgrade cost
+    Rc::new(move |game| {
+        let level = game[building_blackaltar_id]["level"].as_int();
+        vec![(resource_yin_id, ExpNum::from(2.).pow(level as f64 + 4.4))]
+    }),
+    // build cost
+    Rc::new(move |_| vec![(resource_yin_id, ExpNum::from(4444.))]));
+
+    game_def.add_handler("compositor.built", Box::new(move |game, _msg| {
+        if game[building_blackaltar_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+            return;
+        }
+        game[building_blackaltar_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+        game.post_building_properties(building_blackaltar_id);
+    }));
+
+
 }
 
 
 struct Game {
-    rand_state: u32,
-    message_queue: Vec<JsonValue>,
-
     history: Vec<JsonValue>,
+    message_queue: Vec<JsonValue>,
 
     day: u32,
     resources: Vec<ExpNum>,
@@ -1253,10 +1349,8 @@ struct Game {
 impl Game {
     fn new() -> Game {
         Game {
-            rand_state: 393939,
-            message_queue: vec![],
-
             history: vec![],
+            message_queue: vec![],
 
             day: 0,
             resources: game_def!().resources.iter().map(|_| ExpNum::from(0.)).collect(),
@@ -1266,15 +1360,19 @@ impl Game {
         }
     }
 
-    fn get_random_u32(&mut self) -> u32 {
-        self.rand_state ^= self.rand_state << 13;
-        self.rand_state ^= self.rand_state >> 17;
-        self.rand_state ^= self.rand_state << 5;
-        self.rand_state
-    }
-
-    fn rand(&mut self) -> f64 {
-        (self.get_random_u32() % 1000000) as f64 / 1000000.
+    fn rand(&self, salt: &str) -> f64 {
+        // TODO: pre-compute the salt if needed
+        let bytes: [u8; 4] = unsafe { std::mem::transmute(self.day) };
+        let mut state = 0x811c9dc5_u32;
+        for b in bytes.into_iter() {
+            state = state.wrapping_mul(0x01000193);
+            state ^= b as u32;
+        }
+        for b in salt.bytes() {
+            state = state.wrapping_mul(0x01000193);
+            state ^= b as u32;
+        }
+        (state % 1000000) as f64 / 1000000.
     }
 
     fn post_message_front(&mut self, message: JsonValue) {
@@ -1450,7 +1548,7 @@ unsafe extern fn poll(game: *mut Game) {
     let game = &mut *game;
 
     if let Ok(event) = read_json_buffer() {
-        if !event["event"].as_str().unwrap().ends_with(".detail") { // TODO
+        if !event["event"].as_str().unwrap().ends_with(".detail") { // TODO: format_preference?
             game.history.push(event.clone());
         }
 
@@ -1472,7 +1570,7 @@ mod test_game {
     fn test_1() {
         init_game_def();
         let mut game = Game::new();
-        game.dispatch_message(json!({ "event": "init", "rand_seed": 393939 }));
+        game.dispatch_message(json!({ "event": "init" }));
         eprintln!("{:?}", game.resources);
         game.dispatch_message(json!({ "event": "step" }));
         eprintln!("{:?}", game.resources);

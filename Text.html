@@ -10,8 +10,6 @@
             super()
             const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
             this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
-
-            game.on('config.lang', this.render = this.render.bind(this))
         }
 
         connectedCallback() {
