@@ -266,9 +266,9 @@ addEventListener("DOMContentLoaded", async () => {
 })
 
 // not sure if it works
-// addEventListener("beforeunload", () => {
-//     return game.save_to_local_storage()
-// })
+addEventListener("beforeunload", () => {
+    return game.save_to_local_storage()
+})
 
 /*
 some notes:
