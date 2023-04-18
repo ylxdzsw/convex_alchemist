@@ -72,14 +72,14 @@
     async function auto_play() {
         switch (status) {
             case 'dev':
-                for (let i = 0; i < 256; i++)
+                for (let i = 0; i < 64; i++)
                     game.step()
                 setTimeout(auto_play, 0)
                 return
             case 'playing':
-                const overtime = Date.now() - next_step_time
-                if (overtime < 0) {
-                    setTimeout(auto_play, -overtime)
+                const overdue = Date.now() - next_step_time
+                if (overdue < 0) {
+                    setTimeout(auto_play, -overdue)
                     return
                 }
 
@@ -106,13 +106,15 @@
 
     document.querySelector('#status-speed-control-step').addEventListener('click', async () => {
         game.step()
-        if (status === 'playing')
+        if (status == 'playing' || status == 'dev')
             status = 'to_pause'
     })
 
     document.querySelector('#status-speed-control-play-pause').addEventListener('click', () => {
         switch (status) {
             case 'dev':
+                status = 'playing'
+                break
             case 'playing':
                 status = 'to_pause'
                 break
@@ -129,8 +131,10 @@
     document.querySelector('#status-speed-control-dev').addEventListener('click', () => {
         switch (status) {
             case 'dev':
-            case 'playing':
                 status = 'to_pause'
+                break
+            case 'playing':
+                status = 'dev'
                 break
             case 'paused':
                 status = 'dev'
@@ -163,6 +167,6 @@
     })
 
     game.on('devmode', day.devmode_callback = e => {
-        document.querySelector('#status-speed-control-dev').classList.toggle('devmode', e)
+        document.querySelector('#status-speed-control-dev').classList.add('devmode')
     })
 </script>

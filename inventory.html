@@ -28,9 +28,9 @@
             for (const [lang, content] of Object.entries(this.display_name))
                 this.shadowRoot.querySelector('.name').dataset[lang] = content
 
-            game.on(`resources`, this.resource_update_callback = e => {
-                this.shadowRoot.querySelector('.amount').innerHTML = e.resources[this.name]
-                if (e.resources[this.name] != "0") // unlock at the first time it becomes non-0
+            game.on(`resources`, this.resource_update_callback = resources => {
+                this.shadowRoot.querySelector('.amount').innerHTML = resources[this.name]
+                if (resources[this.name] != "0") // unlock at the first time it becomes non-0
                     this.classList.add('unlocked')
             })
         }

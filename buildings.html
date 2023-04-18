@@ -122,34 +122,34 @@
             for (const [lang, display_name] of Object.entries(this.display_name))
                 this.shadowRoot.querySelector('.header .name').dataset[lang] = display_name
 
-            game.on(`${this.name}.income`, this.income_callback = e => {
+            game.on(`${this.name}.income`, this.income_callback = incomes => {
                 let str = ''
-                for (const [resource, income] of Object.entries(e.income)) {
+                for (const [resource, income] of Object.entries(incomes)) {
                     const display_name = document.querySelector(`#inventory-item-${resource}`).display_name[game.lang] ?? document.querySelector(`#inventory-item-${resource}`).display_name['zh']
                     str += `<span style="margin-left: .2rem"></span> ${income} ${display_name}`
                 }
                 this.shadowRoot.querySelector('.header .income').innerHTML = str
             })
 
-            game.on(`${this.name}.properties`, this.properties_callback = e => {
-                if (e.properties.unlocked !== undefined && e.properties.unlocked[1])
+            game.on(`${this.name}.properties`, this.properties_callback = properties => {
+                if (properties.unlocked !== undefined && properties.unlocked[1])
                     this.classList.add('unlocked')
 
-                if (e.properties.built !== undefined && e.properties.built[1])
+                if (properties.built !== undefined && properties.built[1])
                     this.classList.add('built')
             
-                if (e.properties.enabled !== undefined)
-                    this.classList.toggle('enabled', e.properties.enabled[1])
+                if (properties.enabled !== undefined)
+                    this.classList.toggle('enabled', properties.enabled[1])
 
-                if (e.properties.level !== undefined) {
-                    this.shadowRoot.querySelector('.header .level').dataset.zh = `（${e.properties.level[1]}级）`
-                    this.shadowRoot.querySelector('.header .level').dataset.en = ` (Level ${e.properties.level[1]}) `
+                if (properties.level !== undefined) {
+                    this.shadowRoot.querySelector('.header .level').dataset.zh = `（${properties.level[1]}级）`
+                    this.shadowRoot.querySelector('.header .level').dataset.en = ` (Level ${properties.level[1]}) `
 
-                    this.classList.toggle('max-level', e.properties.level[1] >= this.max_level ?? Infinity)
+                    this.classList.toggle('max-level', properties.level[1] >= this.max_level ?? Infinity)
                 }
 
                 if (this.classList.contains('expanded'))
-                    game.pool_with_message({event: `${this.name}.detail`})
+                    game.poll_with_message(`${this.name}.detail`)
             })
 
             const detail = this.shadowRoot.querySelector('.detail')
@@ -160,32 +160,32 @@
             detail.querySelector('.product .content').innerHTML = this.detail.product[game.lang] ?? this.detail.product['zh']
 
             this.shadowRoot.querySelector('.header').addEventListener('click', e => {
-                game.pool_with_message({event: `${this.name}.detail`})
+                game.poll_with_message(`${this.name}.detail`)
                 this.classList.toggle('expanded')
             })
 
             this.shadowRoot.querySelector('button.build').addEventListener('click', e => {
-                game.pool_with_message({event: `${this.name}.build`})
+                game.poll_with_message(`${this.name}.build`)
             })
 
             this.shadowRoot.querySelector('button.enable').addEventListener('click', e => {
-                game.pool_with_message({event: `${this.name}.enable`})
+                game.poll_with_message(`${this.name}.enable`)
             })
 
             this.shadowRoot.querySelector('button.disable').addEventListener('click', e => {
-                game.pool_with_message({event: `${this.name}.disable`})
+                game.poll_with_message(`${this.name}.disable`)
             })
 
             this.shadowRoot.querySelector('button.downgrade').addEventListener('click', e => {
-                game.pool_with_message({event: `${this.name}.downgrade`})
+                game.poll_with_message(`${this.name}.downgrade`)
             })
 
             this.shadowRoot.querySelector('button.upgrade').addEventListener('click', e => {
-                game.pool_with_message({event: `${this.name}.upgrade`})
+                game.poll_with_message(`${this.name}.upgrade`)
             })
 
             this.shadowRoot.querySelector('button.devupgrade').addEventListener('click', e => {
-                game.pool_with_message({event: `${this.name}.devupgrade`})
+                game.poll_with_message(`${this.name}.devupgrade`)
             })
 
             game.on('devmode', this.devmode_callback = e => {
@@ -218,13 +218,13 @@
             this.shadowRoot.querySelector('slot').addEventListener('slotchange', e => {
                 const building_name = this.getRootNode().host.name
                 const field_name = e.target.assignedNodes()[0].textContent.trim()
-                game.on(`${building_name}.detail`, this.detail_callback = e => {
+                game.on(`${building_name}.detail`, this.detail_callback = info => {
                     if (field_name.includes('.')) {
                         const [field, resource] = field_name.split('.')
-                        this.shadowRoot.querySelector('span').innerHTML = e[field]?.[resource]?.[0]
+                        this.shadowRoot.querySelector('span').innerHTML = info[field]?.[resource]?.[0]
                     } else {
                         let content = ''
-                        for (const [resource, [amount, sufficient]] of Object.entries(e[field_name] ?? {})) {
+                        for (const [resource, [amount, sufficient]] of Object.entries(info[field_name] ?? {})) {
                             if (content != '') content += '<br>'
                             content += `${amount} <ca-resource>${resource}</ca-resource>`
                         }
