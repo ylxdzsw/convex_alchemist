@@ -17,8 +17,10 @@ function read_user_language() {
 
     for (const lang of languages) {
         if (lang.startsWith('zh')) return 'zh'
-        return 'en'
+        if (lang.startsWith('en')) return 'en'
     }
+
+    return 'en'
 }
 
 function trim_text_node(node) {
@@ -46,26 +48,43 @@ async function decompress(buffer) {
     return await new Response(decompressor.readable).text()
 }
 
+async function digest(str) {
+    const encoded = new TextEncoder().encode(str)
+    const hash = await crypto.subtle.digest("SHA-256", encoded)
+    return to_base64(hash)
+}
+
+function to_base64(buffer) {
+    return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+}
+
+function from_base64(str) {
+    return Uint8Array.from(atob(str), c => c.charCodeAt(0)).buffer
+}
+
 const game = {
     handlers: Object.create(null),
 
     ptr: null,
 
     lang: read_user_language(),
+    verbose: /verbose/.test(location.search),
+
+    last_autosave: 0, // timestamp in ms
 
     on(event, callback) {
         game.handlers[event] ??= [] // WeakSet is not iterable
         game.handlers[event].push(new WeakRef(callback))
     },
 
-    dispatch_message(message) {
-        console.log("dispatch_message", message)
-        const callbacks = game.handlers[message.event] ?? []
-        if (!callbacks.length) console.warn("message no handler", message)
+    dispatch_message(event, args) {
+        if (game.verbose) console.log("dispatch_message", event, args)
+        const callbacks = game.handlers[event] ?? []
+        if (!callbacks.length) console.warn("message no handler", event)
         for (let i = 0; i < callbacks.length; i++) {
             const callback = callbacks[i].deref()
             if (callback) {
-                callback(message)
+                callback(args)
             } else {
                 callbacks[i] = callbacks[callbacks.length - 1]
                 callbacks.pop()
@@ -95,41 +114,42 @@ const game = {
 
     /// reads the json buffer and process the messages
     process_back_message() {
-        for (const message of game.read_wasm_json())
-            game.dispatch_message(message)
+        const packed_messages = game.read_wasm_json();
+        for (let i = 0; i < packed_messages.length; i += 2)
+            game.dispatch_message(packed_messages[i], packed_messages[i + 1])
     },
 
     /// the returned message is left in the buffer and should be read immediately
-    post_message_back(e) {
-        console.log("post_message_back", e)
-        game.write_wasm_json(e)
+    post_message_back(event, args) {
+        if (game.verbose) console.log("post_message_back", event, args)
+        game.write_wasm_json([event, args])
         ca.poll(game.ptr)
     },
 
     /// this is the method to be used most of the time
-    pool_with_message(e) {
-        game.post_message_back(e)
+    poll_with_message(event, args = null) {
+        game.post_message_back(event, args)
         game.process_back_message()
     },
 
     log(lang_dict) {
-        game.dispatch_message({
-            event: 'log',
-            content: lang_dict
-        })
+        game.dispatch_message('log', lang_dict)
     },
 
-    async step() {
-        game.pool_with_message({event: 'step'})
+    step() {
+        game.poll_with_message('step')
         for (const building of document.querySelectorAll('ca-building.expanded'))
-            game.pool_with_message({event: `${building.name}.detail`})
-        await game.save_to_local_storage()
+            game.poll_with_message(`${building.name}.detail`)
+        if (Date.now() - game.last_autosave > 5000) {
+            game.save_to_local_storage() // no wait
+            game.last_autosave = Date.now()
+        }
     },
 
     init_game() {
         if (game.ptr) throw new Error('game already initialized')
         game.ptr = ca.game_new()
-        game.pool_with_message({event: 'init'})
+        game.poll_with_message('init')
         game.log({
             zh: `游戏初始化完成。`,
             en: `Game initialized.`
@@ -147,14 +167,14 @@ const game = {
         game.write_wasm_json(data_str, false)
         const time = Date.now()
         ca.game_load(game.ptr)
-        console.info("load time", Date.now() - time)
-        game.dispatch_message({ event: 'reset' })
+        if (game.verbose) console.info("load time", Date.now() - time)
+        game.dispatch_message('reset')
         game.process_back_message()
     },
 
     timewarp(day) {
         ca.game_timewarp(game.ptr, day)
-        game.dispatch_message({ event: 'reset' })
+        game.dispatch_message('reset')
         game.process_back_message()
     },
 
@@ -174,8 +194,7 @@ const game = {
         input.accept = '.ca'
         input.onchange = async () => {
             const buffer = await input.files[0].arrayBuffer()
-            const decompressed = await decompress(buffer)
-            game.load(decompressed)
+            game.load(await decompress(buffer))
             game.log({
                 zh: `游戏存档读取完成。`,
                 en: `Save file loaded.`
@@ -185,15 +204,31 @@ const game = {
     },
 
     async save_to_local_storage() {
-        localStorage.setItem('save.ca', game.dump())
+        try {
+            const str = game.dump()
+            if (!str.startsWith("[\"init")) // avoid saving broken state
+                return
+            const save = await compress(game.dump())
+            localStorage.setItem('save.ca', to_base64(save))
+        } catch {
+            game.log({
+                zh: `自动存档失败！`,
+                en: `Auto save failed!`
+            })
+        }
     },
 
     async load_from_local_storage() {
-        game.load(localStorage.getItem('save.ca'), false)
+        const save = from_base64(localStorage.getItem('save.ca'))
+        game.load(await decompress(save))
         game.log({
             zh: `游戏存档读取完成。`,
             en: `Save file loaded.`
         })
+    },
+
+    delete_local_storage() {
+        localStorage.removeItem('save.ca')
     },
 
     show_help() {
@@ -212,13 +247,14 @@ addEventListener("DOMContentLoaded", async () => {
     game.init_game()
 
     if (/devmode/.test(location.search))
-        game.dispatch_message({ event: 'config.devmode' })
+        game.dispatch_message('devmode')
 
     if (localStorage?.getItem('save.ca')) {
         try {
             await game.load_from_local_storage()
         } catch (e) {
             console.error(e)
+            game.dispatch_message("load.fail")
             game.log({
                 zh: `游戏存档读取失败，可能已经损坏。继续游戏将覆盖存档。`,
                 en: `Save file corrupted. Continue will overwrite the save file.`,
@@ -228,6 +264,11 @@ addEventListener("DOMContentLoaded", async () => {
         game.show_help()
     }
 })
+
+// not sure if it works
+// addEventListener("beforeunload", () => {
+//     return game.save_to_local_storage()
+// })
 
 /*
 some notes:

@@ -29,10 +29,10 @@
 <script type="module">
     const container = document.querySelector('#log-container')
 
-    game.on('log', container.log = e => {
+    game.on('log', container.log = lang_dict => {
         // a bit hacky
         const date = document.querySelector('#status-speed-control-day').shadowRoot.textContent.trim()
-        const content = e.content[game.lang] ?? e.content['zh']
+        const content = lang_dict[game.lang] ?? lang_dict['zh']
         const el = document.createElement("p")
         el.classList.add('log')
         el.textContent = date + ': ' + content
