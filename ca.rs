@@ -5,7 +5,7 @@
 #![feature(const_trait_impl)]
 #![feature(const_mut_refs)]
 
-use std::{collections::BTreeMap, fmt::Debug, ops::{Index, IndexMut}, rc::Rc, f64::consts::LN_10, borrow::Borrow};
+use std::{collections::{BTreeMap, VecDeque}, fmt::Debug, ops::{Index, IndexMut}, rc::Rc, f64::consts::LN_10, borrow::Borrow};
 use serde_json::{json, Value as JsonValue};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -423,11 +423,30 @@ fn init_game_def() {
     let game_def = unsafe { &mut GAME_DEF } ;
 
     game_def.add_handler("step", Box::new(move |game, _msg| {
-        game.day += 1
+        game.day += 1;
+        game.message_queue.push_back(json!({
+            "event": "poststep",
+        }));
+    }));
+
+    game_def.add_handler("poststep", Box::new(move |game, _msg| {
+        if game.day % 10000 != 0 {
+            return
+        }
+
+        let checkpoint = game.dump_state();
+        game.history.push(json!({
+            "event": "checkpoint",
+            "checkpoint": checkpoint
+        }));
+    }));
+
+    game_def.add_handler("checkpoint", Box::new(move |game, msg| {
+        game.load_state(msg["checkpoint"].clone());
     }));
 
     game_def.add_handler("init", Box::new(move |game, _msg| {
-        game.post_message_front(json!({
+        game.front_message_queue.push(json!({
             "event": "init",
     
             "resource_defs": game_def!().resources.iter().map(|r| json!({
@@ -551,7 +570,7 @@ fn init_game_def() {
                     if game[resource_id] < cost {
                         game[id].insert("enabled".to_string(), BuildingProperty::Bool(false));
                         game.post_building_properties(id);
-                        game.post_message_front(json!({
+                        game.front_message_queue.push(json!({
                             "event": "log",
                             "content": {
                                 "en": format!("{} is automatically disabled due to lack of resources", game_def!(id).display_name["en"].as_str().unwrap()),
@@ -574,7 +593,7 @@ fn init_game_def() {
                     income_json.insert(game_def!(resource_id).name.to_string(), json!(amount.format_with_preference(&game.format_preference, "html")));
                 }
 
-                game.post_message_front(json!({
+                game.front_message_queue.push(json!({
                     "event": format!("{name}.income"),
                     "income": income_json
                 }))
@@ -593,7 +612,7 @@ fn init_game_def() {
 
                 for &(resource_id, cost) in &costs {
                     if game[resource_id] < cost {
-                        game.post_message_front(json!({
+                        game.front_message_queue.push(json!({
                             "event": "log",
                             "content": {
                                 "en": format!("Not enough {} to build {}", game_def!(resource_id).display_name["en"].as_str().unwrap(), game_def!(id).display_name["en"].as_str().unwrap()),
@@ -612,7 +631,7 @@ fn init_game_def() {
                 game[id].insert("enabled".to_string(), BuildingProperty::Bool(true));
                 game[id].insert("level".to_string(), BuildingProperty::Int(1));
                 game.post_building_properties(id);
-                game.dispatch_message(json!({
+                game.message_queue.push_back(json!({
                     "event": format!("{name}.built")
                 }));
             })
@@ -653,7 +672,7 @@ fn init_game_def() {
 
                 for &(resource_id, cost) in &costs {
                     if game[resource_id] < cost {
-                        game.post_message_front(json!({
+                        game.front_message_queue.push(json!({
                             "event": "log",
                             "content": {
                                 "en": format!("Not enough {} to upgrade {}", game_def!(resource_id).display_name["en"].as_str().unwrap(), game_def!(id).display_name["en"].as_str().unwrap()),
@@ -670,7 +689,7 @@ fn init_game_def() {
 
                 game[id].insert("level".to_string(), BuildingProperty::Int(current_level + 1));
                 game.post_building_properties(id);
-                game.dispatch_message(json!({
+                game.message_queue.push_back(json!({
                     "event": format!("{name}.upgraded")
                 }));
             })
@@ -683,7 +702,7 @@ fn init_game_def() {
             }
             game[id].insert("level".to_string(), BuildingProperty::Int(current_level + 1));
             game.post_building_properties(id);
-            game.dispatch_message(json!({
+            game.message_queue.push_back(json!({
                 "event": format!("{name}.upgraded")
             }));
         }));
@@ -753,7 +772,7 @@ fn init_game_def() {
                     }
                 }
 
-                game.post_message_front(message);
+                game.front_message_queue.push(message);
             })
         });
 
@@ -1337,7 +1356,8 @@ fn init_game_def() {
 
 struct Game {
     history: Vec<JsonValue>,
-    message_queue: Vec<JsonValue>,
+    message_queue: VecDeque<JsonValue>, // messages generated in handlers are queued
+    front_message_queue: Vec<JsonValue>, // accumulated messages to the front
 
     day: u32,
     resources: Vec<ExpNum>,
@@ -1350,7 +1370,8 @@ impl Game {
     fn new() -> Game {
         Game {
             history: vec![],
-            message_queue: vec![],
+            message_queue: VecDeque::new(),
+            front_message_queue: vec![],
 
             day: 0,
             resources: game_def!().resources.iter().map(|_| ExpNum::from(0.)).collect(),
@@ -1375,29 +1396,37 @@ impl Game {
         (state % 1000000) as f64 / 1000000.
     }
 
-    fn post_message_front(&mut self, message: JsonValue) {
-        self.message_queue.push(message);
-    }
+    fn dispatch_message(&mut self, message: &JsonValue) -> Option<()> {
+        fn _dispatch(game: &mut Game, message: &JsonValue) -> Option<()> {
+            let event = message["event"].as_str()?;
 
-    fn dispatch_message(&mut self, message: JsonValue) -> Option<()> {
-        let event = message["event"].as_str()?;
-
-        let handler = game_def!().handlers.get(event)?;
-        for h in handler {
-            h(self, &message);
+            let handler = game_def!().handlers.get(event)?;
+            for h in handler {
+                h(game, message);
+            }
+    
+            Some(())
         }
+
+        _dispatch(self, message)?;
+
+        // process messages generated by handlers
+        while let Some(message) = self.message_queue.pop_front() {
+            _dispatch(self, &message)?
+        }
+
         Some(())
     }
 
     fn post_status(&mut self) {
-        self.post_message_front(json!({
+        self.front_message_queue.push(json!({
             "event": "status",
             "day": self.day
         }));
     }
 
     fn post_resources(&mut self) {
-        self.post_message_front(json!({
+        self.front_message_queue.push(json!({
             "event": "resources",
             "resources": self.resources.iter().enumerate().map(|(i, r)| {
                 (game_def!(ResourceId(i)).name.to_string(), r.format_with_preference(&self.format_preference, "html"))
@@ -1406,7 +1435,7 @@ impl Game {
     }
 
     fn post_bug(&mut self, error: &str) {
-        self.post_message_front(json!({
+        self.front_message_queue.push(json!({
             "event": "bug",
             "content": error
         }));
@@ -1414,7 +1443,7 @@ impl Game {
 
     fn post_building_properties(&mut self, building_id: BuildingId) {
         let name = game_def!(BuildingId(building_id.0)).name;
-        self.post_message_front(json!({
+        self.front_message_queue.push(json!({
             "event": format!("{name}.properties"),
             "properties": self.buildings[building_id.0].iter().map(|(k, v)| {
                 (k.to_string(), v.to_json())
@@ -1423,14 +1452,24 @@ impl Game {
     }
 
     fn fast_forward(&mut self, events: Vec<JsonValue>, max_days: u32) {
-        for event in events {
-            self.history.push(event.clone());
-            self.dispatch_message(event);
-            self.message_queue.clear();
+        // load from last checkpoint
+        let last_checkpoint_position = events.iter()
+            .rposition(|e| e["event"].as_str() == Some("checkpoint") && e["checkpoint"]["day"].as_u64().unwrap() <= max_days as _)
+            .unwrap_or(0);
+
+        let mut i = last_checkpoint_position;
+
+        while i < events.len() {
+            self.dispatch_message(&events[i]);
+            self.front_message_queue.clear();
+            i += 1;
             if self.day >= max_days {
                 break;
             }
         }
+
+        self.history = events;
+        self.history.truncate(i);
     }
 
     fn post_everything(&mut self) {
@@ -1438,6 +1477,39 @@ impl Game {
         self.post_resources();
         for (i, _) in game_def!().buildings.iter().enumerate() {
             self.post_building_properties(BuildingId(i));
+        }
+    }
+
+    // serialize the game state for checkpointing
+    fn dump_state(&self) -> JsonValue {
+        return json!({
+            "day": self.day,
+            "resources": self.resources.iter().enumerate().map(|(i, r)| {
+                (game_def!(ResourceId(i)).name.to_string(), r.as_exp())
+            }).collect::<BTreeMap<String, f64>>(),
+            "buildings": self.buildings.iter().enumerate().map(|(i, b)| {
+                (game_def!(BuildingId(i)).name.to_string(), b.iter().map(|(k, v)| {
+                    (k.to_string(), v.to_json())
+                }).collect::<BTreeMap<String, JsonValue>>())
+            }).collect::<BTreeMap<String, _>>(),
+            "format_preference": self.format_preference.clone()
+        })
+    }
+
+    fn load_state(&mut self, state: JsonValue) {
+        self.day = state["day"].as_u64().unwrap() as _;
+        self.format_preference = state["format_preference"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
+
+        for (name, value) in state["resources"].as_object().unwrap().iter() {
+            let rid = game_def!().resources.iter().position(|r| r.name == name).unwrap();
+            self[ResourceId(rid)] = ExpNum::from_exp(value.as_f64().unwrap());
+        }
+
+        for (building_name, properties) in state["buildings"].as_object().unwrap().iter() {
+            let bid = game_def!().buildings.iter().position(|b| b.name == building_name).unwrap();
+            for (property_name, value) in properties.as_object().unwrap().iter() {
+                self[BuildingId(bid)].insert(property_name.to_string(), BuildingProperty::from_json(value));
+            }
         }
     }
 }
@@ -1519,10 +1591,10 @@ unsafe extern fn game_dump(game: *mut Game) {
 unsafe extern fn game_load(game: *mut Game) {
     let game = &mut *game;
     assert!(game.history.is_empty());
-    if let Ok(history) = read_json_buffer() {
-        game.fast_forward(history.as_array().unwrap().clone(), u32::MAX);
+    if let Ok(mut history) = read_json_buffer() {
+        game.fast_forward(std::mem::take(history.as_array_mut().unwrap()), u32::MAX);
         game.post_everything();
-        write_json_buffer(json!(std::mem::take(&mut game.message_queue)));
+        write_json_buffer(json!(std::mem::take(&mut game.front_message_queue)));
     } else {
         game.post_bug("failed to parse json");
     }
@@ -1535,7 +1607,7 @@ unsafe extern fn game_timewarp(game: *mut Game, day: u32) {
     *game = Game::new();
     game.fast_forward(history, day);
     game.post_everything();
-    write_json_buffer(json!(std::mem::take(&mut game.message_queue)));
+    write_json_buffer(json!(std::mem::take(&mut game.front_message_queue)));
 }
 
 #[no_mangle]
@@ -1548,31 +1620,16 @@ unsafe extern fn poll(game: *mut Game) {
     let game = &mut *game;
 
     if let Ok(event) = read_json_buffer() {
-        if !event["event"].as_str().unwrap().ends_with(".detail") { // TODO: format_preference?
+        if !event["event"].as_str().unwrap().ends_with(".detail") {
             game.history.push(event.clone());
         }
 
-        game.dispatch_message(event);
+        game.dispatch_message(&event);
         game.post_status();
         game.post_resources();
     } else {
         game.post_bug("failed to parse json");
     }
 
-    write_json_buffer(json!(std::mem::take(&mut game.message_queue)));
-}
-
-#[cfg(test)]
-mod test_game {
-    use super::*;
-
-    #[test]
-    fn test_1() {
-        init_game_def();
-        let mut game = Game::new();
-        game.dispatch_message(json!({ "event": "init" }));
-        eprintln!("{:?}", game.resources);
-        game.dispatch_message(json!({ "event": "step" }));
-        eprintln!("{:?}", game.resources);
-    }
+    write_json_buffer(json!(std::mem::take(&mut game.front_message_queue)));
 }

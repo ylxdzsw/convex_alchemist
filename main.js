@@ -16,9 +16,11 @@ function read_user_language() {
     if (lang) languages = [lang[1]]
 
     for (const lang of languages) {
+        if (lang.startsWith('en')) return 'en'
         if (lang.startsWith('zh')) return 'zh'
-        return 'en'
     }
+
+    return 'en'
 }
 
 function trim_text_node(node) {
@@ -46,12 +48,29 @@ async function decompress(buffer) {
     return await new Response(decompressor.readable).text()
 }
 
+async function digest(str) {
+    const encoded = new TextEncoder().encode(str)
+    const hash = await crypto.subtle.digest("SHA-256", encoded)
+    return to_base64(hash)
+}
+
+function to_base64(buffer) {
+    return btoa(String.fromCharCode(...new Uint8Array(buffer)))
+}
+
+function from_base64(str) {
+    return Uint8Array.from(atob(str), c => c.charCodeAt(0)).buffer
+}
+
 const game = {
     handlers: Object.create(null),
 
     ptr: null,
 
     lang: read_user_language(),
+    verbose: /verbose/.test(location.search),
+
+    last_autosave: 0, // timestamp in ms
 
     on(event, callback) {
         game.handlers[event] ??= [] // WeakSet is not iterable
@@ -59,7 +78,7 @@ const game = {
     },
 
     dispatch_message(message) {
-        console.log("dispatch_message", message)
+        if (game.verbose) console.log("dispatch_message", message)
         const callbacks = game.handlers[message.event] ?? []
         if (!callbacks.length) console.warn("message no handler", message)
         for (let i = 0; i < callbacks.length; i++) {
@@ -101,13 +120,13 @@ const game = {
 
     /// the returned message is left in the buffer and should be read immediately
     post_message_back(e) {
-        console.log("post_message_back", e)
+        if (game.verbose) console.log("post_message_back", e)
         game.write_wasm_json(e)
         ca.poll(game.ptr)
     },
 
     /// this is the method to be used most of the time
-    pool_with_message(e) {
+    poll_with_message(e) {
         game.post_message_back(e)
         game.process_back_message()
     },
@@ -119,17 +138,20 @@ const game = {
         })
     },
 
-    async step() {
-        game.pool_with_message({event: 'step'})
+    step() {
+        game.poll_with_message({event: 'step'})
         for (const building of document.querySelectorAll('ca-building.expanded'))
-            game.pool_with_message({event: `${building.name}.detail`})
-        await game.save_to_local_storage()
+            game.poll_with_message({event: `${building.name}.detail`})
+        if (Date.now() - game.last_autosave > 5000) {
+            game.save_to_local_storage() // no wait
+            game.last_autosave = Date.now()
+        }
     },
 
     init_game() {
         if (game.ptr) throw new Error('game already initialized')
         game.ptr = ca.game_new()
-        game.pool_with_message({event: 'init'})
+        game.poll_with_message({event: 'init'})
         game.log({
             zh: `游戏初始化完成。`,
             en: `Game initialized.`
@@ -147,7 +169,7 @@ const game = {
         game.write_wasm_json(data_str, false)
         const time = Date.now()
         ca.game_load(game.ptr)
-        console.info("load time", Date.now() - time)
+        if (game.verbose) console.info("load time", Date.now() - time)
         game.dispatch_message({ event: 'reset' })
         game.process_back_message()
     },
@@ -174,8 +196,7 @@ const game = {
         input.accept = '.ca'
         input.onchange = async () => {
             const buffer = await input.files[0].arrayBuffer()
-            const decompressed = await decompress(buffer)
-            game.load(decompressed)
+            game.load(await decompress(buffer))
             game.log({
                 zh: `游戏存档读取完成。`,
                 en: `Save file loaded.`
@@ -185,11 +206,20 @@ const game = {
     },
 
     async save_to_local_storage() {
-        localStorage.setItem('save.ca', game.dump())
+        try {
+            const save = await compress(game.dump())
+            localStorage.setItem('save.ca', to_base64(save))
+        } catch {
+            game.log({
+                zh: `自动存档失败！`,
+                en: `Auto save failed!`
+            })
+        }
     },
 
     async load_from_local_storage() {
-        game.load(localStorage.getItem('save.ca'), false)
+        const save = from_base64(localStorage.getItem('save.ca'))
+        game.load(await decompress(save))
         game.log({
             zh: `游戏存档读取完成。`,
             en: `Save file loaded.`
@@ -212,7 +242,7 @@ addEventListener("DOMContentLoaded", async () => {
     game.init_game()
 
     if (/devmode/.test(location.search))
-        game.dispatch_message({ event: 'config.devmode' })
+        game.dispatch_message({ event: 'devmode' })
 
     if (localStorage?.getItem('save.ca')) {
         try {

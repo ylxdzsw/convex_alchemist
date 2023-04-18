@@ -188,7 +188,7 @@
                 game.pool_with_message({event: `${this.name}.devupgrade`})
             })
 
-            game.on('config.devmode', this.devmode_callback = e => {
+            game.on('devmode', this.devmode_callback = e => {
                 this.classList.add('devmode')
             })
 

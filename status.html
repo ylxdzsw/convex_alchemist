@@ -13,6 +13,7 @@
         <input id="status-speed-control-speed" type="number" min="1" max="10" step="1" value="2"></input>
         <ca-text data-zh="天/秒" data-en="Day/s"></ca-text>
         <button id="status-speed-control-play-pause">⏯</button>
+        <button id="status-speed-control-dev">⏯</button>
     </div>
 </div>
 <div id="status-timewarp-panel">
@@ -44,20 +45,50 @@
     #status-timewarp-panel.expanded {
         display: block;
     }
+    #status-speed-control-dev {
+        display: none;
+        color: red
+    }
+    #status-speed-control-dev.devmode {
+        display: inline-block;
+    }
 </style>
 
 <script type="module">
     const day = document.querySelector('#status-speed-control-day')
 
-    let status = 'paused' // 'playing', 'paused', 'to_pause'
-    let last_time = 0 // in miliseconds timestamp
+    let status = 'paused' // 'playing', 'paused', 'to_pause', 'dev'
+    let next_step_time = 0 // in miliseconds timestamp
+
+    function get_step_interval() {
+        let speed = parseInt(document.querySelector('#status-speed-control-speed').value)
+        if (isNaN(speed)) speed = 2
+        if (speed < 1) speed = 1
+        if (speed > 10) speed = 10
+
+        return 1000 / speed
+    }
 
     async function auto_play() {
         switch (status) {
+            case 'dev':
+                for (let i = 0; i < 256; i++)
+                    game.step()
+                setTimeout(auto_play, 0)
+                return
             case 'playing':
-                last_time = Date.now()
-                await game.step()
-                break
+                const overtime = Date.now() - next_step_time
+                if (overtime < 0) {
+                    setTimeout(auto_play, -overtime)
+                    return
+                }
+
+                game.step()
+
+                next_step_time = Math.max(next_step_time + get_step_interval(), Date.now() + 4)
+                setTimeout(auto_play, next_step_time - Date.now())
+
+                return
             case 'paused':
                 throw new Error('bug')
             case 'to_pause':
@@ -65,12 +96,7 @@
                 return
         }
 
-        let speed = parseInt(document.querySelector('#status-speed-control-speed').value)
-        if (isNaN(speed)) speed = 2
-        if (speed < 1) speed = 1
-        if (speed > 10) speed = 10
-
-        const expected_time_delta = 1000 / speed
+        const expected_time_delta = get_step_interval()
 
         const delta = last_time + expected_time_delta - Date.now()
         if (delta < 4) delta = 4
@@ -79,13 +105,14 @@
     }
 
     document.querySelector('#status-speed-control-step').addEventListener('click', async () => {
-        await game.step()
+        game.step()
         if (status === 'playing')
             status = 'to_pause'
     })
 
     document.querySelector('#status-speed-control-play-pause').addEventListener('click', () => {
         switch (status) {
+            case 'dev':
             case 'playing':
                 status = 'to_pause'
                 break
@@ -95,6 +122,22 @@
                 break
             case 'to_pause':
                 status = 'playing'
+                break
+        }
+    })
+
+    document.querySelector('#status-speed-control-dev').addEventListener('click', () => {
+        switch (status) {
+            case 'dev':
+            case 'playing':
+                status = 'to_pause'
+                break
+            case 'paused':
+                status = 'dev'
+                auto_play()
+                break
+            case 'to_pause':
+                status = 'dev'
                 break
         }
     })
@@ -117,5 +160,9 @@
         day.dataset.en = `Day ${e.day}`
         if (e.day >= 10)
             document.querySelector('#status-speed-control .hidden')?.classList.remove('hidden')
+    })
+
+    game.on('devmode', day.devmode_callback = e => {
+        document.querySelector('#status-speed-control-dev').classList.toggle('devmode', e)
     })
 </script>
