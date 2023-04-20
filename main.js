@@ -1,4 +1,4 @@
-const VERSION = "v1"
+const VERSION = "v2"
 
 function check_browser_compatability() {
     if (!('content' in document.createElement('template')))
