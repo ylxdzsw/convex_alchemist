@@ -59,8 +59,8 @@
 <script type="module">
     const card = document.querySelector('#inventory-card')
 
-    game.on('init', card.init = e => {
-        for (const resource_def of e.resource_defs) {
+    game.on('init', card.init = game_def => {
+        for (const resource_def of game_def.resource_defs) {
             const item = document.createElement('ca-item')
             Object.assign(item, resource_def)
             item.id = `inventory-item-${resource_def.name}`

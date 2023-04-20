@@ -188,11 +188,11 @@
                 game.poll_with_message(`${this.name}.devupgrade`)
             })
 
-            game.on('devmode', this.devmode_callback = e => {
+            game.on('devmode', this.devmode_callback = () => {
                 this.classList.add('devmode')
             })
 
-            game.on('reset', this.reset = e => {
+            game.on('reset', this.reset = () => {
                 this.classList.remove('unlocked', 'built', 'enabled', 'expanded', 'max-level')
                 this.shadowRoot.querySelector('.header .income').innerHTML = ''
                 for (const lang in this.shadowRoot.querySelector('.header .level').dataset)
@@ -218,13 +218,13 @@
             this.shadowRoot.querySelector('slot').addEventListener('slotchange', e => {
                 const building_name = this.getRootNode().host.name
                 const field_name = e.target.assignedNodes()[0].textContent.trim()
-                game.on(`${building_name}.detail`, this.detail_callback = info => {
+                game.on(`${building_name}.detail`, this.detail_callback = details => {
                     if (field_name.includes('.')) {
                         const [field, resource] = field_name.split('.')
-                        this.shadowRoot.querySelector('span').innerHTML = info[field]?.[resource]?.[0]
+                        this.shadowRoot.querySelector('span').innerHTML = details[field]?.[resource]?.[0]
                     } else {
                         let content = ''
-                        for (const [resource, [amount, sufficient]] of Object.entries(info[field_name] ?? {})) {
+                        for (const [resource, [amount, sufficient]] of Object.entries(details[field_name] ?? {})) {
                             if (content != '') content += '<br>'
                             content += `${amount} <ca-resource>${resource}</ca-resource>`
                         }
@@ -261,8 +261,8 @@
 <script type="module">
     const card = document.querySelector('#building-card')
 
-    game.on('init', card.init = e => {
-        for (const building_def of e.building_defs) {
+    game.on('init', card.init = game_def => {
+        for (const building_def of game_def.building_defs) {
             const building = document.createElement('ca-building')
             Object.assign(building, building_def)
             building.id = `building-${building_def.name}`
