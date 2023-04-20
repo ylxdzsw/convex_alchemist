@@ -11,9 +11,13 @@
         .name {
             font-weight: bold;
         }
+        .income {
+            font-size: .8em;
+        }
     </style>
     <ca-text class="name"></ca-text>: 
     <span class="amount"></span>
+    <span class="income"></span>
 </template>
 
 <script>
@@ -32,6 +36,10 @@
                 this.shadowRoot.querySelector('.amount').innerHTML = resources[this.name]
                 if (resources[this.name] != "0") // unlock at the first time it becomes non-0
                     this.classList.add('unlocked')
+            })
+
+            game.on(`incomes`, this.income_update_callback = incomes => {
+                this.shadowRoot.querySelector('.income').innerHTML = incomes[this.name]["accumulated"] ?? ''
             })
         }
     })

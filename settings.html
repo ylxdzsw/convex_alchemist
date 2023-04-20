@@ -6,7 +6,7 @@
 <div>
 <button id="settings-export"><ca-text data-en="Export Save File" data-zh="导出存档"></ca-text></button>
 <button id="settings-import"><ca-text data-en="Import Save File" data-zh="导入存档"></ca-text></button>
-<button id="settings-remove"><ca-text style="color:red" data-en="Remove Broken Save File" data-zh="删除损坏存档"></ca-text></button>
+<button id="settings-remove"><ca-text style="color:red" data-en="Remove Save File" data-zh="删除存档"></ca-text></button>
 </div>
 
 <div style="margin-top: .4rem">
@@ -14,6 +14,12 @@
 <button id="settings-number-format-e">ℯ<sup>23.314</sup></button>
 <button id="settings-number-format-10">3.14×10<sup>233</sup></button>
 <button id="settings-number-format-a">3.14cc</button>
+</div>
+
+<div style="margin-top: .4rem">
+<ca-text data-en="Resource Changing Value: " data-zh="资源变化量："></ca-text>
+<button id="settings-income-1"><ca-text data-en="Last Day" data-zh="上日变动"></ca-text></button>
+<button id="settings-income-10"><ca-text data-en="10 Days Average" data-zh="十日平均"></ca-text></button>
 </div>
 
 </ca-card>
@@ -55,10 +61,19 @@
         set_number_format(["e", "d", "d", "a", "e", "ee"])
     })
 
+    document.querySelector("#settings-income-1").addEventListener('click', e => {
+        game.poll_with_message("income_preference", 1)
+    })
+
+    document.querySelector("#settings-income-10").addEventListener('click', e => {
+        game.poll_with_message("income_preference", 10)
+    })
+
     game.on('load.fail', document.querySelector("#settings-remove").fail_callback = () => {
         document.querySelector("#settings-remove").style.display = "inline-block"
         document.querySelector("#settings-remove").addEventListener('click', () => {
             game.delete_local_storage()
+            game.save_to_local_storage = () => {} // avoid saving again on beforeunload
             location.reload()
         })
     })

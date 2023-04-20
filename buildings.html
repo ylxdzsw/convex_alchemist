@@ -24,6 +24,9 @@
         .header .name {
             font-weight: bold;
         }
+        .header .income {
+            font-size: .8em;
+        }
         .detail {
             font-size: .9rem;
         }
@@ -122,30 +125,29 @@
             for (const [lang, display_name] of Object.entries(this.display_name))
                 this.shadowRoot.querySelector('.header .name').dataset[lang] = display_name
 
-            game.on(`${this.name}.income`, this.income_callback = incomes => {
-                let str = ''
-                for (const [resource, income] of Object.entries(incomes)) {
-                    const display_name = document.querySelector(`#inventory-item-${resource}`).display_name[game.lang] ?? document.querySelector(`#inventory-item-${resource}`).display_name['zh']
-                    str += `<span style="margin-left: .2rem"></span> ${income} ${display_name}`
-                }
-                this.shadowRoot.querySelector('.header .income').innerHTML = str
+            game.on(`incomes`, this.income_callback = all_incomes => {
+                this.shadowRoot.querySelector('.header .income').innerHTML = Object.entries(all_incomes)
+                    .filter(([_, incomes]) => incomes[this.name])
+                    .map(([resource, incomes]) => `${incomes[this.name]} <ca-resource>${resource}</ca-resource>`)
+                    .join('<span style="margin-left: .4rem"></span>')
             })
 
             game.on(`${this.name}.properties`, this.properties_callback = properties => {
-                if (properties.unlocked !== undefined && properties.unlocked[1])
-                    this.classList.add('unlocked')
+                if (properties.unlocked !== undefined)
+                    this.classList.toggle('unlocked', properties.unlocked == 't')
 
-                if (properties.built !== undefined && properties.built[1])
-                    this.classList.add('built')
+                if (properties.built !== undefined)
+                    this.classList.toggle('built', properties.unlocked == 't')
             
                 if (properties.enabled !== undefined)
-                    this.classList.toggle('enabled', properties.enabled[1])
+                    this.classList.toggle('enabled', properties.enabled == 't')
 
                 if (properties.level !== undefined) {
-                    this.shadowRoot.querySelector('.header .level').dataset.zh = `（${properties.level[1]}级）`
-                    this.shadowRoot.querySelector('.header .level').dataset.en = ` (Level ${properties.level[1]}) `
+                    const level = parseInt(properties.level.slice(1))
+                    this.shadowRoot.querySelector('.header .level').dataset.zh = `（${level}级）`
+                    this.shadowRoot.querySelector('.header .level').dataset.en = ` (Level ${level}) `
 
-                    this.classList.toggle('max-level', properties.level[1] >= this.max_level ?? Infinity)
+                    this.classList.toggle('max-level', level >= (this.max_level ?? Infinity))
                 }
 
                 if (this.classList.contains('expanded'))

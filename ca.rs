@@ -293,14 +293,6 @@ impl SignedExpNum {
         Self { sign: ExpNumSign::Negative, magnitude: ExpNum::zero() }
     }
 
-    fn is_positive(&self) -> bool {
-        self.sign == ExpNumSign::Positive
-    }
-
-    fn is_negative(&self) -> bool {
-        self.sign == ExpNumSign::Negative
-    }
-    
     fn format_with_preference(&self, preference: &[impl Borrow<str>], output_type: &str) -> String {
         assert_eq!(output_type, "html");
 
@@ -308,10 +300,6 @@ impl SignedExpNum {
             ExpNumSign::Positive => format!("+{}", self.magnitude.format_with_preference(preference, output_type)),
             ExpNumSign::Negative => format!("-{}", self.magnitude.format_with_preference(preference, output_type)),
         }
-    }
-
-    fn map(self, f: impl FnOnce(ExpNum) -> ExpNum) -> Self {
-        Self { sign: self.sign, magnitude: f(self.magnitude) }
     }
 }
 
@@ -421,9 +409,9 @@ impl From<f64> for SignedExpNum {
     }
 }
 
-impl std::iter::Sum<Self> for SignedExpNum {
-    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
-        iter.fold(SignedExpNum::positive_zero(), |acc, x| acc + x)
+impl<T: Borrow<Self>> std::iter::Sum<T> for SignedExpNum {
+    fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
+        iter.fold(SignedExpNum::positive_zero(), |acc, x| acc + *x.borrow())
     }
 }
 
@@ -622,12 +610,13 @@ macro_rules! game_def {
 fn init_game_def() {
     let game_def = unsafe { &mut GAME_DEF } ;
 
+    // ensure to run as the first handler for step
     game_def.add_handler("step", Box::new(move |game, _| {
         game.day += 1;
 
         for i in 0..game.incomes.len() {
             for j in 0..game.incomes[i].len() {
-                game.incomes[i][j][game.day as usize % 10] = None
+                game.incomes[i][j][game.day as usize % 10] = SignedExpNum::positive_zero();
             }
         }
     }));
@@ -1534,7 +1523,7 @@ struct Game {
     day: u32,
     resources: Vec<ExpNum>,
     buildings: Vec<BTreeMap<String, SValue>>,
-    incomes: Vec<Vec<[Option<SignedExpNum>; 10]>>, // [resource][building][ring buffer]
+    incomes: Vec<Vec<[SignedExpNum; 10]>>, // [resource][building][ring buffer]
 
     format_preference: Vec<String>,
     income_preference: u8, // 1 or 10
@@ -1550,11 +1539,11 @@ impl Game {
             resources: game_def!().resources.iter().map(|_| ExpNum::from(0.)).collect(),
             buildings: game_def!().buildings.iter().map(|_| BTreeMap::new()).collect(),
             incomes: game_def!().resources.iter().map(|_|
-                game_def!().buildings.iter().map(|_| [None; 10]).collect()
+                game_def!().buildings.iter().map(|_| [SignedExpNum::positive_zero(); 10]).collect()
             ).collect(),
 
             format_preference: ["e", "d", "d", "e", "e", "ee"].into_iter().map(|s| s.to_string()).collect(),
-            income_preference: 10
+            income_preference: 1
         }
     }
 
@@ -1685,10 +1674,7 @@ impl Game {
             }).collect::<BTreeMap<String, _>>(),
             "incomes": self.incomes.iter().enumerate().map(|(i, r)| {
                 (game_def!(ResourceId(i)).name.to_string(), r.iter().enumerate().map(|(j, b)| {
-                    (game_def!(BuildingId(j)).name.to_string(), b.iter().map(|x| match x {
-                        Some(x) => SValue::SignedNum(*x).to_string(),
-                        None => SValue::None.to_string(),
-                    }).collect())
+                    (game_def!(BuildingId(j)).name.to_string(), b.iter().map(|x| SValue::SignedNum(*x).to_string()).collect())
                 }).collect())
             }).collect::<BTreeMap<String, BTreeMap<String, JsonValue>>>(),
 
@@ -1715,11 +1701,7 @@ impl Game {
             for (building_name, values) in buildings.as_object().unwrap().iter() {
                 let bid = game_def!().buildings.iter().position(|b| b.name == building_name).unwrap();
                 for (i, value) in values.as_array().unwrap().iter().enumerate() {
-                    self.incomes[rid][bid][i] = match value.as_str().unwrap().parse::<SValue>().unwrap() {
-                        SValue::SignedNum(x) => Some(x),
-                        SValue::None => None,
-                        _ => unreachable!()
-                    }
+                    self.incomes[rid][bid][i] = value.as_str().unwrap().parse::<SValue>().unwrap().as_signed_num();
                 }
             }
         }
@@ -1735,7 +1717,7 @@ impl Game {
     }
 
     fn record_income(&mut self, resource: ResourceId, building: BuildingId, amount: SignedExpNum) {
-        *self.incomes[resource.0][building.0][(self.day % 10) as usize].get_or_insert(SignedExpNum::positive_zero()) += amount;
+        self.incomes[resource.0][building.0][self.day as usize % 10] += amount;
     }
 
     fn post_incomes(&mut self) {
@@ -1747,10 +1729,10 @@ impl Game {
                 let ring_buffer = &self.incomes[i][j];
                 let income = match self.income_preference {
                     1 => ring_buffer[self.day as usize % 10],
-                    10 => ring_buffer.iter().copied().sum::<Option<SignedExpNum>>().map(|x| x / SignedExpNum::from(ring_buffer.iter().flatten().count() as f64)),
+                    10 => ring_buffer.iter().sum::<SignedExpNum>() / SignedExpNum::from(10.),
                     _ => unreachable!()
                 };
-                if let Some(income) = income {
+                if !income.magnitude.is_zero() {
                     *accumulated.get_or_insert(SignedExpNum::positive_zero()) += income;
                     resource_incomes.insert(building.name.to_string(), income.format_with_preference(&self.format_preference, "html"));
                 }
