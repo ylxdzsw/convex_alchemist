@@ -104,13 +104,13 @@
         setTimeout(auto_play, delta)
     }
 
-    document.querySelector('#status-speed-control-step').addEventListener('click', async () => {
+    document.querySelector('#status-speed-control-step').addEventListener('click', async e => {
         game.step()
         if (status == 'playing' || status == 'dev')
             status = 'to_pause'
     })
 
-    document.querySelector('#status-speed-control-play-pause').addEventListener('click', () => {
+    document.querySelector('#status-speed-control-play-pause').addEventListener('click', e => {
         switch (status) {
             case 'dev':
                 status = 'playing'
@@ -128,7 +128,7 @@
         }
     })
 
-    document.querySelector('#status-speed-control-dev').addEventListener('click', () => {
+    document.querySelector('#status-speed-control-dev').addEventListener('click', e => {
         switch (status) {
             case 'dev':
                 status = 'to_pause'
@@ -146,11 +146,11 @@
         }
     })
 
-    document.querySelector('#status-speed-control-day').addEventListener('click', () => {
+    document.querySelector('#status-speed-control-day').addEventListener('click', e => {
         document.querySelector('#status-timewarp-panel').classList.toggle('expanded')
     })
 
-    document.querySelector('#status-timewarp-button').addEventListener('click', async () => {
+    document.querySelector('#status-timewarp-button').addEventListener('click', async e => {
         const target = parseInt(document.querySelector('#status-timewarp-target').value)
         if (isNaN(target)) return
         if (target < 0) return
@@ -159,14 +159,14 @@
         document.querySelector('#status-timewarp-panel').classList.remove('expanded')
     })
 
-    game.on('status', day.update = e => {
-        day.dataset.zh = `第${e.day}天`
-        day.dataset.en = `Day ${e.day}`
-        if (e.day >= 10)
+    game.on('status', day.update = status => {
+        day.dataset.zh = `第${status.day}天`
+        day.dataset.en = `Day ${status.day}`
+        if (status.day >= 10)
             document.querySelector('#status-speed-control .hidden')?.classList.remove('hidden')
     })
 
-    game.on('devmode', day.devmode_callback = e => {
+    game.on('devmode', day.devmode_callback = () => {
         document.querySelector('#status-speed-control-dev').classList.add('devmode')
     })
 </script>

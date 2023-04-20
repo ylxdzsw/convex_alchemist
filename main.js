@@ -1,3 +1,5 @@
+const VERSION = "v1"
+
 function check_browser_compatability() {
     if (!('content' in document.createElement('template')))
         alert("Your browser is too old to run this game. Please upgrade to a modern browser.")
@@ -184,7 +186,8 @@ const game = {
         const blob = new Blob([compressed], {type: "application/octet-stream"})
         const a = document.createElement('a')
         a.href = URL.createObjectURL(blob)
-        a.download = 'save.ca'
+        const game_day = document.querySelector('#status-speed-control-day').shadowRoot.textContent.trim()
+        a.download = `${game_day}.${VERSION}.ca`
         a.click()
     },
 
@@ -206,10 +209,9 @@ const game = {
     async save_to_local_storage() {
         try {
             const str = game.dump()
-            if (!str.startsWith("[\"init")) // avoid saving broken state
-                return
-            const save = await compress(game.dump())
-            localStorage.setItem('save.ca', to_base64(save))
+            if (str == "[]") return
+            const save = await compress(str)
+            localStorage.setItem(VERSION, to_base64(save))
         } catch {
             game.log({
                 zh: `自动存档失败！`,
@@ -219,7 +221,7 @@ const game = {
     },
 
     async load_from_local_storage() {
-        const save = from_base64(localStorage.getItem('save.ca'))
+        const save = from_base64(localStorage.getItem(VERSION))
         game.load(await decompress(save))
         game.log({
             zh: `游戏存档读取完成。`,
@@ -228,7 +230,7 @@ const game = {
     },
 
     delete_local_storage() {
-        localStorage.removeItem('save.ca')
+        localStorage.removeItem(VERSION)
     },
 
     show_help() {
@@ -249,7 +251,7 @@ addEventListener("DOMContentLoaded", async () => {
     if (/devmode/.test(location.search))
         game.dispatch_message('devmode')
 
-    if (localStorage?.getItem('save.ca')) {
+    if (localStorage?.getItem(VERSION)) {
         try {
             await game.load_from_local_storage()
         } catch (e) {
@@ -265,7 +267,6 @@ addEventListener("DOMContentLoaded", async () => {
     }
 })
 
-// not sure if it works
 addEventListener("beforeunload", () => {
     return game.save_to_local_storage()
 })

@@ -29,11 +29,11 @@
 </style>
 
 <script type="module">
-    document.querySelector("#settings-export").addEventListener('click', () => {
+    document.querySelector("#settings-export").addEventListener('click', e => {
         game.export()
     })
 
-    document.querySelector("#settings-import").addEventListener('click', () => {
+    document.querySelector("#settings-import").addEventListener('click', e => {
         game.import()
     })
 
@@ -43,19 +43,19 @@
             game.poll_with_message(`${building.name}.detail`)
     }
 
-    document.querySelector("#settings-number-format-e").addEventListener('click', () => {
+    document.querySelector("#settings-number-format-e").addEventListener('click', e => {
         set_number_format(["e", "d", "d", "e", "e", "ee"])
     })
 
-    document.querySelector("#settings-number-format-10").addEventListener('click', () => {
+    document.querySelector("#settings-number-format-10").addEventListener('click', e => {
         set_number_format(["e", "d", "d", "10", "10", "ee"])
     })
 
-    document.querySelector("#settings-number-format-a").addEventListener('click', () => {
+    document.querySelector("#settings-number-format-a").addEventListener('click', e => {
         set_number_format(["e", "d", "d", "a", "e", "ee"])
     })
 
-    game.on('load.fail', document.querySelector("#settings-remove").fail_callback = e => {
+    game.on('load.fail', document.querySelector("#settings-remove").fail_callback = () => {
         document.querySelector("#settings-remove").style.display = "inline-block"
         document.querySelector("#settings-remove").addEventListener('click', () => {
             game.delete_local_storage()

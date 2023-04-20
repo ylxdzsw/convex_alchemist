@@ -422,19 +422,12 @@ macro_rules! game_def {
 fn init_game_def() {
     let game_def = unsafe { &mut GAME_DEF } ;
 
-    // this handler is the first to be called
     game_def.add_handler("step", Box::new(move |game, _| {
-        if !game.is_fast_forwarding && game.day > 0 && game.day % 10000 == 0 {
-            let checkpoint = game.dump_state();
-            game.history.push("checkpoint".into());
-            game.history.push(checkpoint);
-        }
-
         game.day += 1;
     }));
 
-    game_def.add_handler("checkpoint", Box::new(move |game, checkpoint| {
-        game.load_state(checkpoint);
+    game_def.add_handler("checkpoint", Box::new(move |_game, _| {
+        panic!("checkpoint event should not be dispatched!");
     }));
 
     game_def.add_handler("init", Box::new(move |game, _| {
@@ -453,8 +446,8 @@ fn init_game_def() {
         }));
     }));
 
-    game_def.add_handler("format_preference", Box::new(move |game, msg| {
-        game.format_preference = msg.as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
+    game_def.add_handler("format_preference", Box::new(move |game, format_preference| {
+        game.format_preference = format_preference.as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
         game.post_resources();
     }));
 
@@ -1326,10 +1319,8 @@ fn init_game_def() {
 
 
 struct Game {
-    history: Vec<JsonValue>, // packed events that event names and args are interleaved with names first
-    message_queue: Vec<JsonValue>, // accumulated messages to the front in the packed format
-
-    is_fast_forwarding: bool, // turns off saving checkpoints and sending info to front
+    history: Vec<JsonValue>, // packed events in the form [day1, event1, arg1, day2, event2, arg2, ...]
+    message_queue: Vec<JsonValue>, // accumulated messages to the front in the form [event1, arg1, event2, arg2, ...]
 
     day: u32,
     resources: Vec<ExpNum>,
@@ -1343,8 +1334,6 @@ impl Game {
         Game {
             history: vec![],
             message_queue: vec![],
-
-            is_fast_forwarding: false,
 
             day: 0,
             resources: game_def!().resources.iter().map(|_| ExpNum::from(0.)).collect(),
@@ -1369,21 +1358,18 @@ impl Game {
         (state % 1000000) as f64 / 1000000.
     }
 
-    fn dispatch_message(&mut self, event: &str, args: &JsonValue) -> Option<()> {
+    fn dispatch_message(&mut self, event: &str, arg: &JsonValue) -> Option<()> {
         let handler = game_def!().handlers.get(event)?;
         for h in handler {
-            h(self, args);
+            h(self, arg);
         }
     
         Some(())
     }
 
-    fn post_message_to_front(&mut self, event: &str, args: JsonValue) {
-        if self.is_fast_forwarding {
-            return;
-        }
+    fn post_message_to_front(&mut self, event: &str, arg: JsonValue) {
         self.message_queue.push(event.into());
-        self.message_queue.push(args);
+        self.message_queue.push(arg);
     }
 
     fn post_status(&mut self) {
@@ -1411,33 +1397,55 @@ impl Game {
         }).collect());
     }
 
-    // the events are interleved with event names
+    // max_days is included
     fn fast_forward(&mut self, packed_events: Vec<JsonValue>, max_days: u32) {
-        self.is_fast_forwarding = true;
-
-        // load from last checkpoint. i is the index of the last checkpoint event name
+        // load from last checkpoint. i is the index of the last checkpoint day
         let mut i = packed_events.len();
-        assert_eq!(i % 2, 0);
+        assert_eq!(i % 3, 0);
         while i > 0 {
-            i -= 2;
-            if packed_events[i].as_str() == Some("checkpoint") && packed_events[i + 1]["day"].as_u64().unwrap() <= max_days as _ {
+            i -= 3;
+            if packed_events[i + 1].as_str().unwrap() == "checkpoint" && packed_events[i].as_u64().unwrap() <= max_days as _ {
                 break;
             }
         }
 
-        // replay from the last checkpoint, i is the index of event name to be dispatched
+        // replay from the last checkpoint, i is the index of day of the event to be dispatched
         while i < packed_events.len() {
-            self.dispatch_message(&packed_events[i].as_str().unwrap(), &packed_events[i + 1]);
-            i += 2;
-            if self.day >= max_days {
-                break;
+            let event_day = packed_events[i].as_u64().unwrap() as u32;
+            let event = packed_events[i + 1].as_str().unwrap();
+            let arg = &packed_events[i + 2];
+
+            if event_day > max_days {
+                while self.day < max_days {
+                    self.dispatch_message("step", &JsonNull);
+                    self.message_queue.clear();
+                }
+                break
             }
+
+            if event == "checkpoint" {
+                self.day = event_day;
+                self.load_state(arg);
+                i += 3;
+                continue
+            }
+
+            while self.day < event_day {
+                self.dispatch_message("step", &JsonNull);
+                self.message_queue.clear();
+            }
+
+            self.dispatch_message(event, arg);
+            self.message_queue.clear();
+            i += 3;
         }
 
         self.history = packed_events;
         self.history.truncate(i);
 
-        self.is_fast_forwarding = false;
+        if i >= 3 && self.history[i - 2].as_str().unwrap() == "dummy" {
+            self.history.truncate(i - 3);
+        }
     }
 
     fn post_everything(&mut self) {
@@ -1451,7 +1459,6 @@ impl Game {
     // serialize the game state for checkpointing
     fn dump_state(&self) -> JsonValue {
         return json!({
-            "day": self.day,
             "resources": self.resources.iter().enumerate().map(|(i, r)| {
                 (game_def!(ResourceId(i)).name.to_string(), r.as_exp())
             }).collect::<BTreeMap<String, f64>>(),
@@ -1465,7 +1472,6 @@ impl Game {
     }
 
     fn load_state(&mut self, state: &JsonValue) {
-        self.day = state["day"].as_u64().unwrap() as _;
         self.format_preference = state["format_preference"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
 
         for (name, value) in state["resources"].as_object().unwrap().iter() {
@@ -1479,6 +1485,12 @@ impl Game {
                 self[BuildingId(bid)].insert(property_name.to_string(), BuildingProperty::from_json(value));
             }
         }
+    }
+
+    fn push_history(&mut self, event: impl ToString, arg: JsonValue) {
+        self.history.push(self.day.into());
+        self.history.push(event.to_string().into());
+        self.history.push(arg);
     }
 }
 
@@ -1515,8 +1527,8 @@ impl IndexMut<BuildingId> for Game {
 static mut JSON_BUFFER: [u32; 3] = [0, 0, 0];
 
 // write to the json buffer. The client need to call free_json_buffer after reading it.
-unsafe fn write_json_buffer(value: JsonValue) {
-    let raw_parts = serde_json::to_vec(&value).unwrap().into_raw_parts();
+unsafe fn write_json_buffer(value: &JsonValue) {
+    let raw_parts = serde_json::to_vec(value).unwrap().into_raw_parts();
     JSON_BUFFER = [raw_parts.0 as _, raw_parts.1 as _, raw_parts.2 as _];
 }
 
@@ -1552,7 +1564,9 @@ unsafe extern fn game_new() -> *mut Game {
 #[no_mangle]
 unsafe extern fn game_dump(game: *mut Game) {
     let game = &mut *game;
-    write_json_buffer(json!(game.history))
+    game.push_history("dummy", JsonNull); // record the last day
+    write_json_buffer(&json!(game.history));
+    game.history.truncate(game.history.len() - 3);
 }
 
 #[no_mangle]
@@ -1562,7 +1576,7 @@ unsafe extern fn game_load(game: *mut Game) {
     if let Ok(mut history) = read_json_buffer() {
         game.fast_forward(std::mem::take(history.as_array_mut().unwrap()), u32::MAX);
         game.post_everything();
-        write_json_buffer(json!(std::mem::take(&mut game.message_queue)));
+        write_json_buffer(&std::mem::take(&mut game.message_queue).into());
     } else {
         game.post_bug("failed to parse json");
     }
@@ -1575,7 +1589,7 @@ unsafe extern fn game_timewarp(game: *mut Game, day: u32) {
     *game = Game::new();
     game.fast_forward(history, day);
     game.post_everything();
-    write_json_buffer(json!(std::mem::take(&mut game.message_queue)));
+    write_json_buffer(&std::mem::take(&mut game.message_queue).into());
 }
 
 #[no_mangle]
@@ -1587,18 +1601,22 @@ unsafe extern fn game_free(game: *mut Game) {
 unsafe extern fn poll(game: *mut Game) {
     let game = &mut *game;
 
-    if let Ok([event, args]) = read_json_buffer().as_ref().map(|x| &x.as_array().unwrap()[..]) {
-        if !event.as_str().unwrap().ends_with(".detail") {
-            game.history.push(event.clone());
-            game.history.push(args.clone());
+    if let Ok([event, arg]) = read_json_buffer().as_ref().map(|x| &x.as_array().unwrap()[..]) {
+        let event = event.as_str().unwrap();
+        if event != "step" && !event.ends_with(".detail") {
+            game.push_history(event, arg.clone());
         }
 
-        game.dispatch_message(event.as_str().unwrap(), &args);
+        game.dispatch_message(event, &arg);
         game.post_status();
         game.post_resources();
+
+        if event == "step" && game.day % 65536 == 0 {
+            game.push_history("checkpoint", game.dump_state());
+        }
     } else {
         game.post_bug("failed to parse json");
     }
 
-    write_json_buffer(json!(std::mem::take(&mut game.message_queue)));
+    write_json_buffer(&std::mem::take(&mut game.message_queue).into());
 }
