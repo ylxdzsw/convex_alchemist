@@ -5,7 +5,7 @@
 #![feature(const_trait_impl)]
 #![feature(const_mut_refs)]
 
-use std::{collections::BTreeMap, fmt::Debug, ops::{Index, IndexMut}, rc::Rc, f64::consts::LN_10, borrow::Borrow};
+use std::{collections::BTreeMap, fmt::Debug, ops::{Index, IndexMut}, rc::Rc, f64::consts::LN_10, borrow::Borrow, str::FromStr};
 use serde_json::{json, Value as JsonValue, Value::Null as JsonNull};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
@@ -267,6 +267,154 @@ mod test_expnum {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ExpNumSign { Positive, Negative }
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct SignedExpNum {
+    sign: ExpNumSign,
+    magnitude: ExpNum,
+}
+
+impl SignedExpNum {
+    fn positive(magnitude: ExpNum) -> Self {
+        Self { sign: ExpNumSign::Positive, magnitude }
+    }
+
+    fn positive_zero() -> Self {
+        Self { sign: ExpNumSign::Positive, magnitude: ExpNum::zero() }
+    }
+
+    fn negative(magnitude: ExpNum) -> Self {
+        Self { sign: ExpNumSign::Negative, magnitude }
+    }
+
+    fn negative_zero() -> Self {
+        Self { sign: ExpNumSign::Negative, magnitude: ExpNum::zero() }
+    }
+
+    fn format_with_preference(&self, preference: &[impl Borrow<str>], output_type: &str) -> String {
+        assert_eq!(output_type, "html");
+
+        match self.sign {
+            ExpNumSign::Positive => format!("+{}", self.magnitude.format_with_preference(preference, output_type)),
+            ExpNumSign::Negative => format!("-{}", self.magnitude.format_with_preference(preference, output_type)),
+        }
+    }
+}
+
+impl std::ops::Add for SignedExpNum {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self::Output {
+        match (self.sign, rhs.sign) {
+            (ExpNumSign::Positive, ExpNumSign::Positive) => {
+                Self::positive(self.magnitude + rhs.magnitude)
+            }
+            (ExpNumSign::Positive, ExpNumSign::Negative) => {
+                if self.magnitude > rhs.magnitude {
+                    Self::positive(self.magnitude - rhs.magnitude)
+                } else {
+                    Self::negative(rhs.magnitude - self.magnitude)
+                }
+            }
+            (ExpNumSign::Negative, ExpNumSign::Positive) => {
+                if self.magnitude > rhs.magnitude {
+                    Self::negative(self.magnitude - rhs.magnitude)
+                } else {
+                    Self::positive(rhs.magnitude - self.magnitude)
+                }
+            }
+            (ExpNumSign::Negative, ExpNumSign::Negative) => {
+                Self::negative(self.magnitude + rhs.magnitude)
+            }
+        }
+    }
+}
+
+impl std::ops::AddAssign for SignedExpNum {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
+impl std::ops::Sub for SignedExpNum {
+    type Output = Self;
+
+    fn sub(self, rhs: Self) -> Self::Output {
+        self + (-rhs)
+    }
+}
+
+impl std::ops::Neg for SignedExpNum {
+    type Output = Self;
+
+    fn neg(self) -> Self::Output {
+        match self.sign {
+            ExpNumSign::Positive => Self::negative(self.magnitude),
+            ExpNumSign::Negative => Self::positive(self.magnitude),
+        }
+    }
+}
+
+impl std::ops::Mul for SignedExpNum {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self.sign, rhs.sign) {
+            (ExpNumSign::Positive, ExpNumSign::Positive) => {
+                Self::positive(self.magnitude * rhs.magnitude)
+            }
+            (ExpNumSign::Positive, ExpNumSign::Negative) => {
+                Self::negative(self.magnitude * rhs.magnitude)
+            }
+            (ExpNumSign::Negative, ExpNumSign::Positive) => {
+                Self::negative(self.magnitude * rhs.magnitude)
+            }
+            (ExpNumSign::Negative, ExpNumSign::Negative) => {
+                Self::positive(self.magnitude * rhs.magnitude)
+            }
+        }
+    }
+}
+
+impl std::ops::Div for SignedExpNum {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        match (self.sign, rhs.sign) {
+            (ExpNumSign::Positive, ExpNumSign::Positive) => {
+                Self::positive(self.magnitude / rhs.magnitude)
+            }
+            (ExpNumSign::Positive, ExpNumSign::Negative) => {
+                Self::negative(self.magnitude / rhs.magnitude)
+            }
+            (ExpNumSign::Negative, ExpNumSign::Positive) => {
+                Self::negative(self.magnitude / rhs.magnitude)
+            }
+            (ExpNumSign::Negative, ExpNumSign::Negative) => {
+                Self::positive(self.magnitude / rhs.magnitude)
+            }
+        }
+    }
+}
+
+impl From<f64> for SignedExpNum {
+    fn from(x: f64) -> Self {
+        if x >= 0. {
+            Self::positive(ExpNum::from(x))
+        } else {
+            Self::negative(ExpNum::from(-x))
+        }
+    }
+}
+
+impl<T: Borrow<Self>> std::iter::Sum<T> for SignedExpNum {
+    fn sum<I: Iterator<Item = T>>(iter: I) -> Self {
+        iter.fold(SignedExpNum::positive_zero(), |acc, x| acc + *x.borrow())
+    }
+}
+
 macro_rules! new_usize_type {
     ($visibility: vis, $type_name: ident) => {
         #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
@@ -316,54 +464,94 @@ struct Building {
     detail: JsonValue
 }
 
+/// simple serializable enum value
 #[derive(Clone, Copy)]
-enum BuildingProperty {
+enum SValue {
     Int(u32),
     Num(ExpNum),
-    Bool(bool)
+    SignedNum(SignedExpNum),
+    Bool(bool),
+    None
 }
 
-impl BuildingProperty {
+impl SValue {
     fn as_int(&self) -> u32 {
         match self {
-            BuildingProperty::Int(x) => *x,
+            SValue::Int(x) => *x,
             _ => unreachable!()
         }
     }
 
     fn as_num(&self) -> ExpNum {
         match self {
-            BuildingProperty::Num(x) => *x,
+            SValue::Num(x) => *x,
+            _ => unreachable!()
+        }
+    }
+
+    fn as_signed_num(&self) -> SignedExpNum {
+        match self {
+            SValue::SignedNum(x) => *x,
             _ => unreachable!()
         }
     }
 
     fn as_bool(&self) -> bool {
         match self {
-            BuildingProperty::Bool(x) => *x,
+            SValue::Bool(x) => *x,
             _ => unreachable!()
         }
     }
 
-    fn to_json(&self) -> JsonValue {
+    fn is_none(&self) -> bool {
         match self {
-            BuildingProperty::Int(x) => json!(["int", x]),
-            BuildingProperty::Num(x) => json!(["num", x.as_exp()]),
-            BuildingProperty::Bool(x) => json!(["bool", x])
+            SValue::None => true,
+            _ => false
         }
     }
+}
 
-    fn from_json(json: &JsonValue) -> Self {
-        match json {
-            JsonValue::Array(arr) => {
-                match arr[0].as_str().unwrap() {
-                    "int" => BuildingProperty::Int(arr[1].as_u64().unwrap() as _),
-                    "num" => BuildingProperty::Num(ExpNum::from_exp(arr[1].as_f64().unwrap_or(f64::NEG_INFINITY))), // JSON doesn't support inf and stores null instead
-                    "bool" => BuildingProperty::Bool(arr[1].as_bool().unwrap()),
-                    _ => unreachable!()
+impl ToString for SValue {
+    fn to_string(&self) -> String {
+        match self {
+            SValue::Int(x) => format!("i{x}"),
+            SValue::Num(x) => if x.is_zero() {
+                "0".to_string()
+            } else {
+                format!("n{}", x.as_exp())
+            },
+            SValue::SignedNum(x) => if x.magnitude.is_zero() {
+                "±0".to_string()
+            } else {
+                match x.sign {
+                    ExpNumSign::Positive => format!("+{}", x.magnitude.as_exp()),
+                    ExpNumSign::Negative => format!("-{}", x.magnitude.as_exp()),
                 }
             },
-            _ => unreachable!()
+            SValue::Bool(x) => match x {
+                true => "t".to_string(),
+                false => "f".to_string()
+            },
+            SValue::None => "∅".to_string()
+        }
+    }
+}
+
+impl FromStr for SValue {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.chars().next().unwrap() {
+            'i' => Ok(SValue::Int(s[1..].parse().unwrap())),
+            '0' => Ok(SValue::Num(ExpNum::zero())),
+            'n' => Ok(SValue::Num(ExpNum::from_exp(s[1..].parse::<f64>().unwrap()))),
+            '±' => Ok(SValue::SignedNum(SignedExpNum::positive_zero())),
+            '+' => Ok(SValue::SignedNum(SignedExpNum::positive(ExpNum::from_exp(s[1..].parse::<f64>().unwrap())))),
+            '-' => Ok(SValue::SignedNum(SignedExpNum::negative(ExpNum::from_exp(s[1..].parse::<f64>().unwrap())))),
+            't' => Ok(SValue::Bool(true)),
+            'f' => Ok(SValue::Bool(false)),
+            '∅' => Ok(SValue::None),
+            _ => Err(())
         }
     }
 }
@@ -422,8 +610,15 @@ macro_rules! game_def {
 fn init_game_def() {
     let game_def = unsafe { &mut GAME_DEF } ;
 
+    // ensure to run as the first handler for step
     game_def.add_handler("step", Box::new(move |game, _| {
         game.day += 1;
+
+        for i in 0..game.incomes.len() {
+            for j in 0..game.incomes[i].len() {
+                game.incomes[i][j][game.day as usize % 10] = SignedExpNum::positive_zero();
+            }
+        }
     }));
 
     game_def.add_handler("checkpoint", Box::new(move |_game, _| {
@@ -449,6 +644,11 @@ fn init_game_def() {
     game_def.add_handler("format_preference", Box::new(move |game, format_preference| {
         game.format_preference = format_preference.as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
         game.post_resources();
+    }));
+
+    game_def.add_handler("income_preference", Box::new(move |game, income_preference| {
+        game.income_preference = income_preference.as_u64().unwrap() as _;
+        game.post_incomes();
     }));
 
     let resource_man_id = ResourceId(game_def.resources.len());
@@ -551,7 +751,7 @@ fn init_game_def() {
 
                 for &(resource_id, cost) in &costs {
                     if game[resource_id] < cost {
-                        game[id].insert("enabled".to_string(), BuildingProperty::Bool(false));
+                        game[id].insert("enabled".to_string(), SValue::Bool(false));
                         game.post_building_properties(id);
                         game.post_message_to_front("log", json!({
                             "en": format!("{} is automatically disabled due to lack of resources", game_def!(id).display_name["en"].as_str().unwrap()),
@@ -563,17 +763,15 @@ fn init_game_def() {
 
                 for (resource_id, cost) in costs {
                     game[resource_id] -= cost;
+                    game.record_income(resource_id, id, SignedExpNum::negative(cost));
                 }
 
                 let products = product_fun(game);
-                let mut income_json = serde_json::Map::new(); // due to lifetime issue we have to make it without closure
 
                 for &(resource_id, amount) in &products {
                     game[resource_id] += amount;
-                    income_json.insert(game_def!(resource_id).name.to_string(), json!(amount.format_with_preference(&game.format_preference, "html")));
+                    game.record_income(resource_id, id, SignedExpNum::positive(amount));
                 }
-
-                game.post_message_to_front(&format!("{name}.income"), json!(income_json));
             })
         });
 
@@ -601,9 +799,9 @@ fn init_game_def() {
                     game[resource_id] -= cost;
                 }
 
-                game[id].insert("built".to_string(), BuildingProperty::Bool(true));
-                game[id].insert("enabled".to_string(), BuildingProperty::Bool(true));
-                game[id].insert("level".to_string(), BuildingProperty::Int(1));
+                game[id].insert("built".to_string(), SValue::Bool(true));
+                game[id].insert("enabled".to_string(), SValue::Bool(true));
+                game[id].insert("level".to_string(), SValue::Int(1));
                 game.post_building_properties(id);
                 game.dispatch_message(&format!("{name}.built"), &JsonNull);
             })
@@ -614,7 +812,7 @@ fn init_game_def() {
                 return;
             }
 
-            game[id].insert("enabled".to_string(), BuildingProperty::Bool(true));
+            game[id].insert("enabled".to_string(), SValue::Bool(true));
             game.post_building_properties(id);
         }));
 
@@ -623,7 +821,7 @@ fn init_game_def() {
                 return;
             }
 
-            game[id].insert("enabled".to_string(), BuildingProperty::Bool(false));
+            game[id].insert("enabled".to_string(), SValue::Bool(false));
             game.post_building_properties(id);
         }));
 
@@ -656,7 +854,7 @@ fn init_game_def() {
                     game[resource_id] -= cost;
                 }
 
-                game[id].insert("level".to_string(), BuildingProperty::Int(current_level + 1));
+                game[id].insert("level".to_string(), SValue::Int(current_level + 1));
                 game.post_building_properties(id);
                 game.dispatch_message(&format!("{name}.upgraded"), &JsonNull);
             })
@@ -667,7 +865,7 @@ fn init_game_def() {
             if current_level >= max_level {
                 return
             }
-            game[id].insert("level".to_string(), BuildingProperty::Int(current_level + 1));
+            game[id].insert("level".to_string(), SValue::Int(current_level + 1));
             game.post_building_properties(id);
             game.dispatch_message(&format!("{name}.upgraded"), &JsonNull);
         }));
@@ -682,7 +880,7 @@ fn init_game_def() {
                 return;
             }
 
-            game[id].insert("level".to_string(), BuildingProperty::Int(current_level - 1));
+            game[id].insert("level".to_string(), SValue::Int(current_level - 1));
             game.post_building_properties(id);
         }));
 
@@ -792,10 +990,10 @@ fn init_game_def() {
     }));
 
     game_def.add_handler("init", Box::new(move |game, _| {
-        game[building_tent_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
-        game[building_tent_id].insert("built".to_string(), BuildingProperty::Bool(true));
-        game[building_tent_id].insert("enabled".to_string(), BuildingProperty::Bool(true));
-        game[building_tent_id].insert("level".to_string(), BuildingProperty::Int(1));
+        game[building_tent_id].insert("unlocked".to_string(), SValue::Bool(true));
+        game[building_tent_id].insert("built".to_string(), SValue::Bool(true));
+        game[building_tent_id].insert("enabled".to_string(), SValue::Bool(true));
+        game[building_tent_id].insert("level".to_string(), SValue::Int(1));
         game.post_building_properties(building_tent_id);
     }));
 
@@ -855,10 +1053,10 @@ fn init_game_def() {
         }
         let tent_level = game[building_tent_id]["level"].as_int();
         if tent_level >= 5 {
-            game[building_forest_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
-            game[building_forest_id].insert("built".to_string(), BuildingProperty::Bool(true));
-            game[building_forest_id].insert("enabled".to_string(), BuildingProperty::Bool(true));
-            game[building_forest_id].insert("level".to_string(), BuildingProperty::Int(1));
+            game[building_forest_id].insert("unlocked".to_string(), SValue::Bool(true));
+            game[building_forest_id].insert("built".to_string(), SValue::Bool(true));
+            game[building_forest_id].insert("enabled".to_string(), SValue::Bool(true));
+            game[building_forest_id].insert("level".to_string(), SValue::Int(1));
             game.post_building_properties(building_forest_id);
         }
     }));
@@ -921,10 +1119,10 @@ fn init_game_def() {
         }
         let tent_level = game[building_tent_id]["level"].as_int();
         if tent_level >= 5 {
-            game[building_swamp_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
-            game[building_swamp_id].insert("built".to_string(), BuildingProperty::Bool(true));
-            game[building_swamp_id].insert("enabled".to_string(), BuildingProperty::Bool(true));
-            game[building_swamp_id].insert("level".to_string(), BuildingProperty::Int(1));
+            game[building_swamp_id].insert("unlocked".to_string(), SValue::Bool(true));
+            game[building_swamp_id].insert("built".to_string(), SValue::Bool(true));
+            game[building_swamp_id].insert("enabled".to_string(), SValue::Bool(true));
+            game[building_swamp_id].insert("level".to_string(), SValue::Int(1));
             game.post_building_properties(building_swamp_id);
         }
     }));
@@ -977,7 +1175,7 @@ fn init_game_def() {
         }
         let tent_level = game[building_tent_id]["level"].as_int();
         if tent_level >= 5 {
-            game[building_campfire_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+            game[building_campfire_id].insert("unlocked".to_string(), SValue::Bool(true));
             game.post_building_properties(building_campfire_id);
         }
     }));
@@ -1031,7 +1229,7 @@ fn init_game_def() {
         }
         let tent_level = game[building_tent_id]["level"].as_int();
         if tent_level >= 5 {
-            game[building_mine_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+            game[building_mine_id].insert("unlocked".to_string(), SValue::Bool(true));
             game.post_building_properties(building_mine_id);
         }
     }));
@@ -1091,7 +1289,7 @@ fn init_game_def() {
         }
         let tent_level = game[building_tent_id]["level"].as_int();
         if tent_level >= 10 {
-            game[building_farm_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+            game[building_farm_id].insert("unlocked".to_string(), SValue::Bool(true));
             game.post_building_properties(building_farm_id);
         }
     }));
@@ -1148,7 +1346,7 @@ fn init_game_def() {
         }
         let mine_level = game[building_mine_id]["level"].as_int();
         if mine_level >= 5 {
-            game[building_nuke_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+            game[building_nuke_id].insert("unlocked".to_string(), SValue::Bool(true));
             game.post_building_properties(building_nuke_id);
         }
     }));
@@ -1208,7 +1406,7 @@ fn init_game_def() {
         if game[building_smelter_id].get("unlocked").map_or(false, |x| x.as_bool()) {
             return;
         }
-        game[building_smelter_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+        game[building_smelter_id].insert("unlocked".to_string(), SValue::Bool(true));
         game.post_building_properties(building_smelter_id);
     }));
 
@@ -1262,7 +1460,7 @@ fn init_game_def() {
         if game[building_compositor_id].get("unlocked").map_or(false, |x| x.as_bool()) {
             return;
         }
-        game[building_compositor_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+        game[building_compositor_id].insert("unlocked".to_string(), SValue::Bool(true));
         game.post_building_properties(building_compositor_id);
     }));
 
@@ -1310,7 +1508,7 @@ fn init_game_def() {
         if game[building_blackaltar_id].get("unlocked").map_or(false, |x| x.as_bool()) {
             return;
         }
-        game[building_blackaltar_id].insert("unlocked".to_string(), BuildingProperty::Bool(true));
+        game[building_blackaltar_id].insert("unlocked".to_string(), SValue::Bool(true));
         game.post_building_properties(building_blackaltar_id);
     }));
 
@@ -1324,9 +1522,11 @@ struct Game {
 
     day: u32,
     resources: Vec<ExpNum>,
-    buildings: Vec<BTreeMap<String, BuildingProperty>>,
+    buildings: Vec<BTreeMap<String, SValue>>,
+    incomes: Vec<Vec<[SignedExpNum; 10]>>, // [resource][building][ring buffer]
 
-    format_preference: Vec<String>
+    format_preference: Vec<String>,
+    income_preference: u8, // 1 or 10
 }
 
 impl Game {
@@ -1338,8 +1538,12 @@ impl Game {
             day: 0,
             resources: game_def!().resources.iter().map(|_| ExpNum::from(0.)).collect(),
             buildings: game_def!().buildings.iter().map(|_| BTreeMap::new()).collect(),
+            incomes: game_def!().resources.iter().map(|_|
+                game_def!().buildings.iter().map(|_| [SignedExpNum::positive_zero(); 10]).collect()
+            ).collect(),
 
-            format_preference: ["e", "d", "d", "e", "e", "ee"].into_iter().map(|s| s.to_string()).collect()
+            format_preference: ["e", "d", "d", "e", "e", "ee"].into_iter().map(|s| s.to_string()).collect(),
+            income_preference: 1
         }
     }
 
@@ -1393,7 +1597,7 @@ impl Game {
     fn post_building_properties(&mut self, building_id: BuildingId) {
         let name = game_def!(BuildingId(building_id.0)).name;
         self.post_message_to_front(&format!("{name}.properties"), self.buildings[building_id.0].iter().map(|(k, v)| {
-            (k.to_string(), v.to_json())
+            (k.to_string(), v.to_string())
         }).collect());
     }
 
@@ -1451,6 +1655,7 @@ impl Game {
     fn post_everything(&mut self) {
         self.post_status();
         self.post_resources();
+        self.post_incomes();
         for (i, _) in game_def!().buildings.iter().enumerate() {
             self.post_building_properties(BuildingId(i));
         }
@@ -1464,16 +1669,21 @@ impl Game {
             }).collect::<BTreeMap<String, f64>>(),
             "buildings": self.buildings.iter().enumerate().map(|(i, b)| {
                 (game_def!(BuildingId(i)).name.to_string(), b.iter().map(|(k, v)| {
-                    (k.to_string(), v.to_json())
-                }).collect::<BTreeMap<String, JsonValue>>())
+                    (k.to_string(), v.to_string())
+                }).collect::<BTreeMap<String, String>>())
             }).collect::<BTreeMap<String, _>>(),
-            "format_preference": self.format_preference.clone()
+            "incomes": self.incomes.iter().enumerate().map(|(i, r)| {
+                (game_def!(ResourceId(i)).name.to_string(), r.iter().enumerate().map(|(j, b)| {
+                    (game_def!(BuildingId(j)).name.to_string(), b.iter().map(|x| SValue::SignedNum(*x).to_string()).collect())
+                }).collect())
+            }).collect::<BTreeMap<String, BTreeMap<String, JsonValue>>>(),
+
+            "format_preference": self.format_preference.clone(),
+            "income_preference": self.income_preference,
         })
     }
 
     fn load_state(&mut self, state: &JsonValue) {
-        self.format_preference = state["format_preference"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
-
         for (name, value) in state["resources"].as_object().unwrap().iter() {
             let rid = game_def!().resources.iter().position(|r| r.name == name).unwrap();
             self[ResourceId(rid)] = ExpNum::from_exp(value.as_f64().unwrap_or(f64::NEG_INFINITY));
@@ -1482,15 +1692,57 @@ impl Game {
         for (building_name, properties) in state["buildings"].as_object().unwrap().iter() {
             let bid = game_def!().buildings.iter().position(|b| b.name == building_name).unwrap();
             for (property_name, value) in properties.as_object().unwrap().iter() {
-                self[BuildingId(bid)].insert(property_name.to_string(), BuildingProperty::from_json(value));
+                self[BuildingId(bid)].insert(property_name.to_string(), value.as_str().unwrap().parse().unwrap());
             }
         }
+
+        for (resource_name, buildings) in state["incomes"].as_object().unwrap().iter() {
+            let rid = game_def!().resources.iter().position(|r| r.name == resource_name).unwrap();
+            for (building_name, values) in buildings.as_object().unwrap().iter() {
+                let bid = game_def!().buildings.iter().position(|b| b.name == building_name).unwrap();
+                for (i, value) in values.as_array().unwrap().iter().enumerate() {
+                    self.incomes[rid][bid][i] = value.as_str().unwrap().parse::<SValue>().unwrap().as_signed_num();
+                }
+            }
+        }
+
+        self.format_preference = state["format_preference"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
+        self.income_preference = state["income_preference"].as_u64().unwrap() as _;
     }
 
     fn push_history(&mut self, event: impl ToString, arg: JsonValue) {
         self.history.push(self.day.into());
         self.history.push(event.to_string().into());
         self.history.push(arg);
+    }
+
+    fn record_income(&mut self, resource: ResourceId, building: BuildingId, amount: SignedExpNum) {
+        self.incomes[resource.0][building.0][self.day as usize % 10] += amount;
+    }
+
+    fn post_incomes(&mut self) {
+        let mut all_incomes = BTreeMap::new();
+        for (i, resource) in game_def!().resources.iter().enumerate() {
+            let mut resource_incomes = BTreeMap::new();
+            let mut accumulated = None;
+            for (j, building) in game_def!().buildings.iter().enumerate() {
+                let ring_buffer = &self.incomes[i][j];
+                let income = match self.income_preference {
+                    1 => ring_buffer[self.day as usize % 10],
+                    10 => ring_buffer.iter().sum::<SignedExpNum>() / SignedExpNum::from(10.),
+                    _ => unreachable!()
+                };
+                if !income.magnitude.is_zero() {
+                    *accumulated.get_or_insert(SignedExpNum::positive_zero()) += income;
+                    resource_incomes.insert(building.name.to_string(), income.format_with_preference(&self.format_preference, "html"));
+                }
+            }
+            if let Some(accumulated) = accumulated {
+                resource_incomes.insert("accumulated".into(), accumulated.format_with_preference(&self.format_preference, "html"));
+            }
+            all_incomes.insert(resource.name.to_string(), resource_incomes);
+        }
+        self.post_message_to_front("incomes", json!(all_incomes));
     }
 }
 
@@ -1509,7 +1761,7 @@ impl IndexMut<ResourceId> for Game {
 }
 
 impl Index<BuildingId> for Game {
-    type Output = BTreeMap<String, BuildingProperty>;
+    type Output = BTreeMap<String, SValue>;
 
     fn index(&self, index: BuildingId) -> &Self::Output {
         &self.buildings[index.0]
@@ -1585,9 +1837,10 @@ unsafe extern fn game_load(game: *mut Game) {
 #[no_mangle]
 unsafe extern fn game_timewarp(game: *mut Game, day: u32) {
     let game = &mut *game;
+    game.push_history("dummy", JsonNull);
     let history = std::mem::take(&mut game.history);
     *game = Game::new();
-    game.fast_forward(history, day);
+    game.fast_forward(history, day); // fast_forward automatically trim the dummy event
     game.post_everything();
     write_json_buffer(&std::mem::take(&mut game.message_queue).into());
 }
@@ -1610,6 +1863,7 @@ unsafe extern fn poll(game: *mut Game) {
         game.dispatch_message(event, &arg);
         game.post_status();
         game.post_resources();
+        game.post_incomes();
 
         if event == "step" && game.day % 65536 == 0 {
             game.push_history("checkpoint", game.dump_state());

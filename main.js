@@ -1,4 +1,4 @@
-const VERSION = "v1"
+const VERSION = "v2"
 
 function check_browser_compatability() {
     if (!('content' in document.createElement('template')))
@@ -265,6 +265,15 @@ addEventListener("DOMContentLoaded", async () => {
     } else {
         game.show_help()
     }
+
+    let rest_clicks_to_show_button = 5;
+    document.querySelector('#bottom-notice').addEventListener('click', () => {
+        if (rest_clicks_to_show_button > 0) {
+            rest_clicks_to_show_button -= 1
+        } else {
+            game.dispatch_message("load.fail")
+        }
+    })
 })
 
 addEventListener("beforeunload", () => {

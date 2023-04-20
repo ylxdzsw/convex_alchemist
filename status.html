@@ -120,6 +120,7 @@
                 break
             case 'paused':
                 status = 'playing'
+                next_step_time = Date.now()
                 auto_play()
                 break
             case 'to_pause':
@@ -138,6 +139,7 @@
                 break
             case 'paused':
                 status = 'dev'
+                next_step_time = Date.now()
                 auto_play()
                 break
             case 'to_pause':
