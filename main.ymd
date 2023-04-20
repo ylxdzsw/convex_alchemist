@@ -16,7 +16,6 @@ window.ca = x.instance.exports
 
 [wasm]= read("target/wasm32-unknown-unknown/release/ca.wasm", 'base64')
 
-
 [#] Chrome only load font if it appear BOTH inside and outside the shadow dom, even when inlined as data url
 [require].style-katex(lib/katex.css)
 [require](lib/katex.js)

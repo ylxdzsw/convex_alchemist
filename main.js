@@ -209,7 +209,6 @@ const game = {
     async save_to_local_storage() {
         try {
             const str = game.dump()
-            console.log(str)
             if (str == "[]") return
             const save = await compress(str)
             localStorage.setItem(VERSION, to_base64(save))
@@ -268,7 +267,6 @@ addEventListener("DOMContentLoaded", async () => {
     }
 })
 
-// not sure if it works
 addEventListener("beforeunload", () => {
     return game.save_to_local_storage()
 })
