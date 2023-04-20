@@ -281,8 +281,16 @@ impl SignedExpNum {
         Self { sign: ExpNumSign::Positive, magnitude }
     }
 
+    fn positive_zero() -> Self {
+        Self { sign: ExpNumSign::Positive, magnitude: ExpNum::zero() }
+    }
+
     fn negative(magnitude: ExpNum) -> Self {
         Self { sign: ExpNumSign::Negative, magnitude }
+    }
+
+    fn negative_zero() -> Self {
+        Self { sign: ExpNumSign::Negative, magnitude: ExpNum::zero() }
     }
 
     fn is_positive(&self) -> bool {
@@ -336,6 +344,12 @@ impl std::ops::Add for SignedExpNum {
     }
 }
 
+impl std::ops::AddAssign for SignedExpNum {
+    fn add_assign(&mut self, rhs: Self) {
+        *self = *self + rhs;
+    }
+}
+
 impl std::ops::Sub for SignedExpNum {
     type Output = Self;
 
@@ -355,6 +369,63 @@ impl std::ops::Neg for SignedExpNum {
     }
 }
 
+impl std::ops::Mul for SignedExpNum {
+    type Output = Self;
+
+    fn mul(self, rhs: Self) -> Self::Output {
+        match (self.sign, rhs.sign) {
+            (ExpNumSign::Positive, ExpNumSign::Positive) => {
+                Self::positive(self.magnitude * rhs.magnitude)
+            }
+            (ExpNumSign::Positive, ExpNumSign::Negative) => {
+                Self::negative(self.magnitude * rhs.magnitude)
+            }
+            (ExpNumSign::Negative, ExpNumSign::Positive) => {
+                Self::negative(self.magnitude * rhs.magnitude)
+            }
+            (ExpNumSign::Negative, ExpNumSign::Negative) => {
+                Self::positive(self.magnitude * rhs.magnitude)
+            }
+        }
+    }
+}
+
+impl std::ops::Div for SignedExpNum {
+    type Output = Self;
+
+    fn div(self, rhs: Self) -> Self::Output {
+        match (self.sign, rhs.sign) {
+            (ExpNumSign::Positive, ExpNumSign::Positive) => {
+                Self::positive(self.magnitude / rhs.magnitude)
+            }
+            (ExpNumSign::Positive, ExpNumSign::Negative) => {
+                Self::negative(self.magnitude / rhs.magnitude)
+            }
+            (ExpNumSign::Negative, ExpNumSign::Positive) => {
+                Self::negative(self.magnitude / rhs.magnitude)
+            }
+            (ExpNumSign::Negative, ExpNumSign::Negative) => {
+                Self::positive(self.magnitude / rhs.magnitude)
+            }
+        }
+    }
+}
+
+impl From<f64> for SignedExpNum {
+    fn from(x: f64) -> Self {
+        if x >= 0. {
+            Self::positive(ExpNum::from(x))
+        } else {
+            Self::negative(ExpNum::from(-x))
+        }
+    }
+}
+
+impl std::iter::Sum<Self> for SignedExpNum {
+    fn sum<I: Iterator<Item = Self>>(iter: I) -> Self {
+        iter.fold(SignedExpNum::positive_zero(), |acc, x| acc + x)
+    }
+}
 
 macro_rules! new_usize_type {
     ($visibility: vis, $type_name: ident) => {
@@ -411,7 +482,8 @@ enum SValue {
     Int(u32),
     Num(ExpNum),
     SignedNum(SignedExpNum),
-    Bool(bool)
+    Bool(bool),
+    None
 }
 
 impl SValue {
@@ -442,6 +514,13 @@ impl SValue {
             _ => unreachable!()
         }
     }
+
+    fn is_none(&self) -> bool {
+        match self {
+            SValue::None => true,
+            _ => false
+        }
+    }
 }
 
 impl ToString for SValue {
@@ -464,7 +543,8 @@ impl ToString for SValue {
             SValue::Bool(x) => match x {
                 true => "t".to_string(),
                 false => "f".to_string()
-            }
+            },
+            SValue::None => "∅".to_string()
         }
     }
 }
@@ -477,11 +557,12 @@ impl FromStr for SValue {
             'i' => Ok(SValue::Int(s[1..].parse().unwrap())),
             '0' => Ok(SValue::Num(ExpNum::zero())),
             'n' => Ok(SValue::Num(ExpNum::from_exp(s[1..].parse::<f64>().unwrap()))),
-            '±' => Ok(SValue::SignedNum(SignedExpNum::positive(ExpNum::zero()))),
+            '±' => Ok(SValue::SignedNum(SignedExpNum::positive_zero())),
             '+' => Ok(SValue::SignedNum(SignedExpNum::positive(ExpNum::from_exp(s[1..].parse::<f64>().unwrap())))),
             '-' => Ok(SValue::SignedNum(SignedExpNum::negative(ExpNum::from_exp(s[1..].parse::<f64>().unwrap())))),
             't' => Ok(SValue::Bool(true)),
             'f' => Ok(SValue::Bool(false)),
+            '∅' => Ok(SValue::None),
             _ => Err(())
         }
     }
@@ -543,6 +624,12 @@ fn init_game_def() {
 
     game_def.add_handler("step", Box::new(move |game, _| {
         game.day += 1;
+
+        for i in 0..game.incomes.len() {
+            for j in 0..game.incomes[i].len() {
+                game.incomes[i][j][game.day as usize % 10] = None
+            }
+        }
     }));
 
     game_def.add_handler("checkpoint", Box::new(move |_game, _| {
@@ -568,6 +655,11 @@ fn init_game_def() {
     game_def.add_handler("format_preference", Box::new(move |game, format_preference| {
         game.format_preference = format_preference.as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
         game.post_resources();
+    }));
+
+    game_def.add_handler("income_preference", Box::new(move |game, income_preference| {
+        game.income_preference = income_preference.as_u64().unwrap() as _;
+        game.post_incomes();
     }));
 
     let resource_man_id = ResourceId(game_def.resources.len());
@@ -682,17 +774,15 @@ fn init_game_def() {
 
                 for (resource_id, cost) in costs {
                     game[resource_id] -= cost;
+                    game.record_income(resource_id, id, SignedExpNum::negative(cost));
                 }
 
                 let products = product_fun(game);
-                let mut income_json = serde_json::Map::new(); // due to lifetime issue we have to make it without closure
 
                 for &(resource_id, amount) in &products {
                     game[resource_id] += amount;
-                    income_json.insert(game_def!(resource_id).name.to_string(), json!(amount.format_with_preference(&game.format_preference, "html")));
+                    game.record_income(resource_id, id, SignedExpNum::positive(amount));
                 }
-
-                game.post_message_to_front(&format!("{name}.income"), json!(income_json));
             })
         });
 
@@ -1444,8 +1534,10 @@ struct Game {
     day: u32,
     resources: Vec<ExpNum>,
     buildings: Vec<BTreeMap<String, SValue>>,
+    incomes: Vec<Vec<[Option<SignedExpNum>; 10]>>, // [resource][building][ring buffer]
 
-    format_preference: Vec<String>
+    format_preference: Vec<String>,
+    income_preference: u8, // 1 or 10
 }
 
 impl Game {
@@ -1457,8 +1549,12 @@ impl Game {
             day: 0,
             resources: game_def!().resources.iter().map(|_| ExpNum::from(0.)).collect(),
             buildings: game_def!().buildings.iter().map(|_| BTreeMap::new()).collect(),
+            incomes: game_def!().resources.iter().map(|_|
+                game_def!().buildings.iter().map(|_| [None; 10]).collect()
+            ).collect(),
 
-            format_preference: ["e", "d", "d", "e", "e", "ee"].into_iter().map(|s| s.to_string()).collect()
+            format_preference: ["e", "d", "d", "e", "e", "ee"].into_iter().map(|s| s.to_string()).collect(),
+            income_preference: 10
         }
     }
 
@@ -1570,6 +1666,7 @@ impl Game {
     fn post_everything(&mut self) {
         self.post_status();
         self.post_resources();
+        self.post_incomes();
         for (i, _) in game_def!().buildings.iter().enumerate() {
             self.post_building_properties(BuildingId(i));
         }
@@ -1586,13 +1683,21 @@ impl Game {
                     (k.to_string(), v.to_string())
                 }).collect::<BTreeMap<String, String>>())
             }).collect::<BTreeMap<String, _>>(),
-            "format_preference": self.format_preference.clone()
+            "incomes": self.incomes.iter().enumerate().map(|(i, r)| {
+                (game_def!(ResourceId(i)).name.to_string(), r.iter().enumerate().map(|(j, b)| {
+                    (game_def!(BuildingId(j)).name.to_string(), b.iter().map(|x| match x {
+                        Some(x) => SValue::SignedNum(*x).to_string(),
+                        None => SValue::None.to_string(),
+                    }).collect())
+                }).collect())
+            }).collect::<BTreeMap<String, BTreeMap<String, JsonValue>>>(),
+
+            "format_preference": self.format_preference.clone(),
+            "income_preference": self.income_preference,
         })
     }
 
     fn load_state(&mut self, state: &JsonValue) {
-        self.format_preference = state["format_preference"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
-
         for (name, value) in state["resources"].as_object().unwrap().iter() {
             let rid = game_def!().resources.iter().position(|r| r.name == name).unwrap();
             self[ResourceId(rid)] = ExpNum::from_exp(value.as_f64().unwrap_or(f64::NEG_INFINITY));
@@ -1604,12 +1709,58 @@ impl Game {
                 self[BuildingId(bid)].insert(property_name.to_string(), value.as_str().unwrap().parse().unwrap());
             }
         }
+
+        for (resource_name, buildings) in state["incomes"].as_object().unwrap().iter() {
+            let rid = game_def!().resources.iter().position(|r| r.name == resource_name).unwrap();
+            for (building_name, values) in buildings.as_object().unwrap().iter() {
+                let bid = game_def!().buildings.iter().position(|b| b.name == building_name).unwrap();
+                for (i, value) in values.as_array().unwrap().iter().enumerate() {
+                    self.incomes[rid][bid][i] = match value.as_str().unwrap().parse::<SValue>().unwrap() {
+                        SValue::SignedNum(x) => Some(x),
+                        SValue::None => None,
+                        _ => unreachable!()
+                    }
+                }
+            }
+        }
+
+        self.format_preference = state["format_preference"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
+        self.income_preference = state["income_preference"].as_u64().unwrap() as _;
     }
 
     fn push_history(&mut self, event: impl ToString, arg: JsonValue) {
         self.history.push(self.day.into());
         self.history.push(event.to_string().into());
         self.history.push(arg);
+    }
+
+    fn record_income(&mut self, resource: ResourceId, building: BuildingId, amount: SignedExpNum) {
+        *self.incomes[resource.0][building.0][(self.day % 10) as usize].get_or_insert(SignedExpNum::positive_zero()) += amount;
+    }
+
+    fn post_incomes(&mut self) {
+        let mut all_incomes = BTreeMap::new();
+        for (i, resource) in game_def!().resources.iter().enumerate() {
+            let mut resource_incomes = BTreeMap::new();
+            let mut accumulated = None;
+            for (j, building) in game_def!().buildings.iter().enumerate() {
+                let ring_buffer = &self.incomes[i][j];
+                let income = match self.income_preference {
+                    1 => ring_buffer[self.day as usize % 10],
+                    10 => ring_buffer.iter().copied().sum::<Option<SignedExpNum>>().map(|x| x / SignedExpNum::from(ring_buffer.iter().flatten().count() as f64)),
+                    _ => unreachable!()
+                };
+                if let Some(income) = income {
+                    *accumulated.get_or_insert(SignedExpNum::positive_zero()) += income;
+                    resource_incomes.insert(building.name.to_string(), income.format_with_preference(&self.format_preference, "html"));
+                }
+            }
+            if let Some(accumulated) = accumulated {
+                resource_incomes.insert("accumulated".into(), accumulated.format_with_preference(&self.format_preference, "html"));
+            }
+            all_incomes.insert(resource.name.to_string(), resource_incomes);
+        }
+        self.post_message_to_front("incomes", json!(all_incomes));
     }
 }
 
@@ -1704,9 +1855,10 @@ unsafe extern fn game_load(game: *mut Game) {
 #[no_mangle]
 unsafe extern fn game_timewarp(game: *mut Game, day: u32) {
     let game = &mut *game;
+    game.push_history("dummy", JsonNull);
     let history = std::mem::take(&mut game.history);
     *game = Game::new();
-    game.fast_forward(history, day);
+    game.fast_forward(history, day); // fast_forward automatically trim the dummy event
     game.post_everything();
     write_json_buffer(&std::mem::take(&mut game.message_queue).into());
 }
@@ -1729,6 +1881,7 @@ unsafe extern fn poll(game: *mut Game) {
         game.dispatch_message(event, &arg);
         game.post_status();
         game.post_resources();
+        game.post_incomes();
 
         if event == "step" && game.day % 65536 == 0 {
             game.push_history("checkpoint", game.dump_state());
