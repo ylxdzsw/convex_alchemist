@@ -154,6 +154,11 @@
                     game.poll_with_message(`${this.name}.detail`)
             })
 
+            game.on(`${this.name}.detail`, this.detail_callback = details => {
+                this.shadowRoot.querySelector('button.build').disabled = Object.entries(details.build_cost).some(([resource, [amount, sufficient]]) => !sufficient)
+                this.shadowRoot.querySelector('button.upgrade').disabled = Object.entries(details.upgrade_cost).some(([resource, [amount, sufficient]]) => !sufficient)
+            })
+
             const detail = this.shadowRoot.querySelector('.detail')
             detail.querySelector('.description').innerHTML = this.detail.description[game.lang] ?? this.detail.description['zh']
             detail.querySelector('.cost .content').innerHTML = this.detail.cost[game.lang] ?? this.detail.cost['zh']
