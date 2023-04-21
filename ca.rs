@@ -1914,6 +1914,11 @@ impl Game {
                     (k.to_string(), v.to_string())
                 }).collect::<BTreeMap<String, String>>())
             }).collect::<BTreeMap<String, _>>(),
+            "relics": self.relics.iter().enumerate().map(|(i, b)| {
+                (game_def!(RelicId(i)).name.to_string(), b.iter().map(|(k, v)| {
+                    (k.to_string(), v.to_string())
+                }).collect::<BTreeMap<String, String>>())
+            }).collect::<BTreeMap<String, _>>(),
             "incomes": self.incomes.iter().enumerate().map(|(i, r)| {
                 (game_def!(ResourceId(i)).name.to_string(), r.iter().enumerate().map(|(j, b)| {
                     (game_def!(BuildingId(j)).name.to_string(), b.iter().map(|x| SValue::SignedNum(*x).to_string()).collect())
@@ -1935,6 +1940,13 @@ impl Game {
             let bid = game_def!().buildings.iter().position(|b| b.name == building_name).unwrap();
             for (property_name, value) in properties.as_object().unwrap().iter() {
                 self[BuildingId(bid)].insert(property_name.to_string(), value.as_str().unwrap().parse().unwrap());
+            }
+        }
+
+        for (relic_name, properties) in state["relics"].as_object().unwrap().iter() {
+            let rid = game_def!().relics.iter().position(|r| r.name == relic_name).unwrap();
+            for (property_name, value) in properties.as_object().unwrap().iter() {
+                self[RelicId(rid)].insert(property_name.to_string(), value.as_str().unwrap().parse().unwrap());
             }
         }
 
