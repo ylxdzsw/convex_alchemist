@@ -226,10 +226,10 @@
                 const building_name = this.getRootNode().host.name
                 const field_name = e.target.assignedNodes()[0].textContent.trim()
                 game.on(`${building_name}.detail`, this.detail_callback = details => {
-                    if (field_name.includes('.')) {
+                    if (field_name.includes('.')) { // costs and products
                         const [field, resource] = field_name.split('.')
                         this.shadowRoot.querySelector('span').innerHTML = details[field]?.[resource]?.[0]
-                    } else {
+                    } else { // build_cost and upgrade_cost
                         let content = ''
                         for (const [resource, [amount, sufficient]] of Object.entries(details[field_name] ?? {})) {
                             if (content != '') content += '<br>'
