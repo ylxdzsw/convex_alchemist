@@ -47,6 +47,8 @@
         game.poll_with_message("format_preference", format)
         for (const building of document.querySelectorAll('ca-building.expanded'))
             game.poll_with_message(`${building.name}.detail`)
+        for (const relic of document.querySelectorAll('ca-relic.expanded'))
+            game.poll_with_message(`${relic.name}.detail`)
     }
 
     document.querySelector("#settings-number-format-e").addEventListener('click', e => {

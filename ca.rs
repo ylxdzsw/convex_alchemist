@@ -661,6 +661,13 @@ fn init_game_def() {
                 "max_level": b.max_level,
                 "detail": b.detail
             })).collect::<Vec<_>>(),
+
+            "relic_defs": game_def!().relics.iter().map(|r| json!({
+                "name": r.name,
+                "display_name": r.display_name,
+                "passive": r.passive,
+                "detail": r.detail
+            })).collect::<Vec<_>>(),
         }));
     }));
 
@@ -755,7 +762,7 @@ fn init_game_def() {
         forge_effect_fun: Rc<dyn Fn(&mut Game)>,
         activate_condition_fun: Rc<dyn Fn(&Game) -> bool>,
         activate_effect_fun: Rc<dyn Fn(&mut Game)>,
-        cool_down_fun: Rc<dyn Fn(&Game) -> u32>,
+        cooldown_fun: Rc<dyn Fn(&Game) -> u32>,
         detail_fun: Rc<dyn Fn(&Game) -> JsonValue>
     ) -> RelicId {
         let name = relic.name;
@@ -766,6 +773,7 @@ fn init_game_def() {
 
         game_def.add_handler(format!("{name}.forge"), {
             let forge_condition_fun = forge_condition_fun.clone();
+            let forge_effect_fun = forge_effect_fun.clone();
 
             Box::new(move |game, _| {
                 if !game[id].get("unlocked").map_or(false, |x| x.as_bool()) || game[id].get("forged").map_or(false, |x| x.as_bool()) {
@@ -787,16 +795,25 @@ fn init_game_def() {
             })
         });
 
+        game_def.add_handler(format!("{name}.devforge"), {
+            let _forge_effect_fun = forge_effect_fun.clone();
+
+            Box::new(move |game, _| {
+                game[id].insert("forged".to_string(), SValue::Bool(true));
+                game.post_relic_properties(id);
+            })
+        });
+
         game_def.add_handler(format!("{name}.activate"), {
             let activate_condition_fun = activate_condition_fun.clone();
-            let cool_down_fun = cool_down_fun.clone();
+            let cooldown_fun = cooldown_fun.clone();
 
             Box::new(move |game, _| {
                 if !game[id].get("forged").map_or(false, |x| x.as_bool()) || passive {
                     return
                 }
 
-                if game[id].get("cool_down_at").map_or(0, |x| x.as_int()) > game.day {
+                if game[id].get("cooldown_at").map_or(0, |x| x.as_int()) > game.day {
                     game.post_message_to_front("log", json!({
                         "en": format!("{} is still cooling down.", game_def!(id).display_name["en"].as_str().unwrap()),
                         "zh": format!("{}还在冷却中。", game_def!(id).display_name["zh"].as_str().unwrap())
@@ -814,8 +831,8 @@ fn init_game_def() {
 
                 activate_effect_fun(game);
 
-                let cool_down_time = game.day + cool_down_fun(game);
-                game[id].insert("cool_down_at".to_string(), SValue::Int(cool_down_time));
+                let cooldown_time = game.day + cooldown_fun(game);
+                game[id].insert("cooldown_at".to_string(), SValue::Int(cooldown_time));
                 game.post_relic_properties(id);
             })
         });
@@ -839,7 +856,7 @@ fn init_game_def() {
         detail: json!({
             "description": {
                 "en": r#"50% discount for all building and upgrading costs before Day 6570."#,
-                "zh": r#"在第6570天前，所有建筑和升级的成本减半。"#,
+                "zh": r#"在第6570天前，所有建筑建造和升级的成本减半。"#,
             },
             "forge_condition": {
                 "en": r#"<ca-relic-detail-slot>forge_cost.metal</ca-relic-detail-slot> <ca-resource>metal</ca-resource>"#,
@@ -849,7 +866,7 @@ fn init_game_def() {
                 "en": r#""#,
                 "zh": r#""#,
             },
-            "cool_down": {
+            "cooldown": {
                 "en": r#""#,
                 "zh": r#""#,
             }
@@ -858,12 +875,15 @@ fn init_game_def() {
     // forge_condition_fun
     Rc::new(move |game| game[resource_metal_id] >= ExpNum::from_exp(20.)),
     // forge_effect_fun
-    Rc::new(move |game| game[resource_metal_id] -= ExpNum::from_exp(20.)),
+    Rc::new(move |game| {
+        game[resource_metal_id] -= ExpNum::from_exp(20.);
+        game.post_message_to_front("building.details", JsonNull) // ask front end to update building details
+    }),
     // activate_condition_fun
     Rc::new(move |_game| false),
     // activate_effect_fun
     Rc::new(move |_game| {}),
-    // cool_down_fun
+    // cooldown_fun
     Rc::new(move |_game| 0),
     // detail_fun
     Rc::new(move |game| json!({
@@ -908,7 +928,7 @@ fn init_game_def() {
     //             "en": r#""#,
     //             "zh": r#""#,
     //         },
-    //         "cool_down": {
+    //         "cooldown": {
     //             "en": r#""#,
     //             "zh": r#""#,
     //         }
@@ -1802,14 +1822,14 @@ impl Game {
     }
 
     fn post_building_properties(&mut self, building_id: BuildingId) {
-        let name = game_def!(BuildingId(building_id.0)).name;
+        let name = game_def!(building_id).name;
         self.post_message_to_front(&format!("{name}.properties"), self.buildings[building_id.0].iter().map(|(k, v)| {
             (k.to_string(), v.to_string())
         }).collect());
     }
 
     fn post_relic_properties(&mut self, relic_id: RelicId) {
-        let name = game_def!(BuildingId(relic_id.0)).name;
+        let name = game_def!(relic_id).name;
         self.post_message_to_front(&format!("{name}.properties"), self.relics[relic_id.0].iter().map(|(k, v)| {
             (k.to_string(), v.to_string())
         }).collect());
@@ -1877,6 +1897,9 @@ impl Game {
         self.post_incomes();
         for (i, _) in game_def!().buildings.iter().enumerate() {
             self.post_building_properties(BuildingId(i));
+        }
+        for (i, _) in game_def!().relics.iter().enumerate() {
+            self.post_relic_properties(RelicId(i));
         }
     }
 
@@ -1964,7 +1987,7 @@ impl Game {
         self.post_message_to_front("incomes", json!(all_incomes));
     }
 
-    // states that persist across time wrappings
+    // states that persist across time warppings
     fn dump_persistent_state(&mut self) -> JsonValue {
         return json!({
             "forged_relics": self.relics.iter().enumerate()

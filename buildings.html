@@ -199,7 +199,7 @@
                 this.classList.add('devmode')
             })
 
-            game.on('reset', this.reset = () => {
+            game.on('reset', this.reset_callback = () => {
                 this.classList.remove('unlocked', 'built', 'enabled', 'expanded', 'max-level')
                 this.shadowRoot.querySelector('.header .income').innerHTML = ''
                 for (const lang in this.shadowRoot.querySelector('.header .level').dataset)
@@ -275,5 +275,10 @@
             building.id = `building-${building_def.name}`
             document.querySelector('#building-card').append(building)
         }
+    })
+
+    game.on('building.details', card.detail_callback = () => {
+        for (const building of card.querySelectorAll('ca-building.expanded'))
+            game.poll_with_message(`${building.name}.detail`)
     })
 </script>
