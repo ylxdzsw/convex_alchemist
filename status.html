@@ -161,7 +161,7 @@
         document.querySelector('#status-timewarp-panel').classList.remove('expanded')
     })
 
-    game.on('status', day.update = status => {
+    game.on('status', day.status_callback = status => {
         day.dataset.zh = `第${status.day}天`
         day.dataset.en = `Day ${status.day}`
         if (status.day >= 10)

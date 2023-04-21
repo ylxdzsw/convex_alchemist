@@ -1,0 +1,269 @@
+<template id="template-relic">
+    <style>
+        :host {
+            display: none;
+            border: #bbb 1px solid;
+            border-radius: 5px;
+            overflow-y: hidden;
+            height: 2rem; /* the height of header */
+            padding: 0 .5rem;
+            margin-top: 1rem;
+        }
+        :host(.unlocked) {
+            display: block;
+        }
+        :host(.expanded) {
+            height: auto;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 2rem;
+        }
+        .header .name {
+            font-weight: bold;
+        }
+        .header .cooldown {
+            font-size: .8em;
+        }
+        :host(.passive) .cooldown {
+            display: none;
+        }
+        .detail {
+            font-size: .9rem;
+        }
+        .detail p {
+            margin: 0;
+        }
+        .detail p:first-child {
+            margin: .3rem 0 .5rem;
+        }
+        .detail .title {
+            font-weight: bold;
+        }
+        .operation {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            margin-top: .5rem;
+            margin-bottom: .4rem;
+        }
+
+        .forge_condition > *, .activate_condition > *, .detail > .cooldown > * {
+            display: block;
+        }
+
+        .forge-condition { display: flex; }
+        :host(.forged) .forge-condition { display: none; }
+
+        .activate-condition { display: none; }
+        :host(.forged) .activate-condition { display: flex; }
+        :host(.forged.passive) .activate-condition { display: none; }
+
+        .detail .cooldown { display: none; }
+        :host(.forged) .detail .cooldown { display: flex; }
+        :host(.forged.passive) .detail .cooldown { display: flex; }
+
+        :host(.forged) .forge { display: none; }
+
+        .activate { display: none; }
+        :host(.forged) .activate { display: inline; }
+        :host(.forged.passive) .activate { display: none; }
+        :host(.forged.cooling-down) .activate { display: none; }
+
+        .devforge { display: none; }
+        :host(.devmode) .devforge { display: inline; }
+        :host(.devmode.forged) .devforge { display: none; }
+    </style>
+
+    <div class="header">
+        <span><ca-text class="name"></ca-text></span>
+        <span class="cooldown"></span>
+    </div>
+
+    <div class="body">
+        <div class="detail">
+            <p class="description"></p>
+            <p class="forge-condition"><ca-text class="title" data-zh="锻造条件：" data-en="Forging Requirement: " data-style-en="margin-right: .4rem"></ca-text><span class="content"></span></p>
+            <p class="activate-condition"><ca-text class="title" data-zh="激活条件：" data-en="Activation Requirement: " data-style-en="margin-right: .4rem"></ca-text><span class="content"></span></p>
+            <p class="cooldown"><ca-text class="title" data-zh="冷却时间：" data-en="Cooldown: " data-style-en="margin-right: .4rem"></ca-text><span class="content"></span></p>
+        </div>
+        <div class="operation">
+            <button class="forge"><ca-text data-zh="锻造" data-en="Forge"></ca-text></button>
+            <button class="activate"><ca-text data-zh="激活" data-en="Activate"></ca-text></button>
+            <button class="devforge"><ca-text data-zh="作弊锻造" data-en="Dev Forge"></ca-text></button>
+        </div>
+    </div>
+</template>
+
+<script>
+    customElements.define('ca-relic', class extends HTMLElement {
+        constructor() {
+            super()
+            const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
+            this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
+        }
+
+        connectedCallback() {
+            for (const [lang, display_name] of Object.entries(this.display_name))
+                this.shadowRoot.querySelector('.header .name').dataset[lang] = display_name
+
+            if (this.passive)
+                this.classList.add('passive')
+
+            game.on(`${this.name}.properties`, this.properties_callback = properties => {
+                if (properties.unlocked !== undefined)
+                    this.classList.toggle('unlocked', properties.unlocked == 't')
+
+                if (properties.forged !== undefined)
+                    this.classList.toggle('forged', properties.forged == 't')
+            
+                if (properties.forged == 't') {
+                    document.querySelector('#relic-card.hidden')?.classList.remove('hidden')
+                    document.querySelector('#relic-card-guide').classList.add('hidden')
+                }
+
+                if (properties.cooldown_at !== undefined) {
+                    this.cooldown_at = parseInt(properties.cooldown_at.slice(1))
+                    this.update_cooldown()
+                }
+
+                if (this.classList.contains('expanded'))
+                    game.poll_with_message(`${this.name}.detail`)
+            })
+
+            const detail = this.shadowRoot.querySelector('.detail')
+            detail.querySelector('.description').innerHTML = this.detail.description[game.lang] ?? this.detail.description['zh']
+            detail.querySelector('.forge-condition .content').innerHTML = this.detail.forge_condition[game.lang] ?? this.detail.forge_condition['zh']
+            if (detail.querySelector('.forge-condition .content').innerHTML.trim() == '')
+                detail.querySelector('.forge-condition').style.display = 'none'
+            detail.querySelector('.activate-condition .content').innerHTML = this.detail.activate_condition[game.lang] ?? this.detail.activate_condition['zh']
+            if (detail.querySelector('.activate-condition .content').innerHTML.trim() == '')
+                detail.querySelector('.activate-condition').style.display = 'none'
+            detail.querySelector('.cooldown .content').innerHTML = this.detail.cooldown[game.lang] ?? this.detail.cooldown['zh']
+            if (detail.querySelector('.cooldown .content').innerHTML.trim() == '')
+                detail.querySelector('.cooldown').style.display = 'none'
+
+            this.shadowRoot.querySelector('.header').addEventListener('click', e => {
+                game.poll_with_message(`${this.name}.detail`)
+                this.classList.toggle('expanded')
+            })
+
+            this.shadowRoot.querySelector('button.forge').addEventListener('click', e => {
+                game.poll_with_message(`${this.name}.forge`)
+            })
+
+            this.shadowRoot.querySelector('button.devforge').addEventListener('click', e => {
+                game.poll_with_message(`${this.name}.devforge`)
+            })
+
+            this.shadowRoot.querySelector('button.activate').addEventListener('click', e => {
+                game.poll_with_message(`${this.name}.activate`)
+            })
+
+            game.on('devmode', this.devmode_callback = () => {
+                this.classList.add('devmode')
+            })
+
+            game.on('status', this.status_callback = status => {
+                this.day = status.day
+                this.update_cooldown()
+            })
+
+            game.on('reset', this.reset_callback = () => {
+                this.classList.remove('unlocked', 'forged', 'expanded', 'cooling-down')
+                this.cooldown_at = this.day = null
+                this.update_cooldown()
+            })
+        }
+
+        update_cooldown() {
+            if (!this.cooldown_at || !this.day) return
+
+            const cooldown = this.cooldown_at - this.day
+            if (cooldown <= 0) {
+                for (const lang in this.shadowRoot.querySelector('.header .cooldown').dataset)
+                    this.shadowRoot.querySelector('.header .cooldown').dataset[lang] = ''
+                this.classList.remove('cooling-down')
+            } else {
+                this.shadowRoot.querySelector('.header .cooldown').dataset.zh = `（冷却：${cooldown}天）`
+                this.shadowRoot.querySelector('.header .cooldown').dataset.en = ` (CD: ${cooldown} days) `
+                this.classList.add('cooling-down')
+            }
+        }
+    })
+</script>
+
+
+<template id="template-relic-detail-slot">
+    <span></span>
+    <slot style="display: none;"></slot>
+</template>
+
+<script>
+    customElements.define('ca-relic-detail-slot', class extends HTMLElement {
+        constructor() {
+            super()
+            const template = document.querySelector(`#template-${this.tagName.slice(3).toLowerCase()}`)
+            this.attachShadow({mode: 'open'}).append(template.content.cloneNode(true))
+
+            this.shadowRoot.querySelector('slot').addEventListener('slotchange', e => {
+                const relic_name = this.getRootNode().host.name
+                const field_name = e.target.assignedNodes()[0].textContent.trim()
+                game.on(`${relic_name}.detail`, this.detail_callback = details => {
+                    switch (typeof details[field_name]) {
+                        case 'string':
+                            this.shadowRoot.querySelector('span').innerHTML = details[field_name]
+                            break
+                        case 'object':
+                            this.shadowRoot.querySelector('span').innerHTML = details[field_name][game.lang] ?? details[field_name]['zh']
+                            break
+                    }
+                })
+            })
+        }
+    })
+</script>
+
+
+
+<ca-card
+    id="relic-card"
+    class="hidden"
+    data-title-zh="圣物"
+    data-title-en="Relics"
+>
+<ca-text id="relic-card-guide"
+    data-zh="圣物锻造后在时间回溯之后依然有效。点击状态卡片里的天数可以回溯到之前的状态。回溯前务必导出存档。"
+    data-en="Once forged, relics remain effective after time travel. Click the Day in the status card to travel back to previous states. Be sure to export the save before time travel."
+>
+</ca-text>
+</ca-card>
+
+<style>
+    #relic-card.hidden {
+        display: none;
+    }
+    #relic-card-guide.hidden {
+        display: none;
+    }
+</style>
+
+<script type="module">
+    const card = document.querySelector('#relic-card')
+
+    game.on('init', card.init = game_def => {
+        for (const relic_def of game_def.relic_defs) {
+            const relic = document.createElement('ca-relic')
+            Object.assign(relic, relic_def)
+            relic.id = `relic-${relic_def.name}`
+            document.querySelector('#relic-card').append(relic)
+        }
+    })
+
+    game.on('status', card.status_update = status => {
+        if (status.day >= 1000)
+            document.querySelector('#relic-card.hidden')?.classList.remove('hidden')
+    })
+</script>

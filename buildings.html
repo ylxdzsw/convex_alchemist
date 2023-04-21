@@ -154,6 +154,11 @@
                     game.poll_with_message(`${this.name}.detail`)
             })
 
+            game.on(`${this.name}.detail`, this.detail_callback = details => {
+                this.shadowRoot.querySelector('button.build').disabled = Object.entries(details.build_cost).some(([resource, [amount, sufficient]]) => !sufficient)
+                this.shadowRoot.querySelector('button.upgrade').disabled = Object.entries(details.upgrade_cost).some(([resource, [amount, sufficient]]) => !sufficient)
+            })
+
             const detail = this.shadowRoot.querySelector('.detail')
             detail.querySelector('.description').innerHTML = this.detail.description[game.lang] ?? this.detail.description['zh']
             detail.querySelector('.cost .content').innerHTML = this.detail.cost[game.lang] ?? this.detail.cost['zh']
@@ -194,7 +199,7 @@
                 this.classList.add('devmode')
             })
 
-            game.on('reset', this.reset = () => {
+            game.on('reset', this.reset_callback = () => {
                 this.classList.remove('unlocked', 'built', 'enabled', 'expanded', 'max-level')
                 this.shadowRoot.querySelector('.header .income').innerHTML = ''
                 for (const lang in this.shadowRoot.querySelector('.header .level').dataset)
@@ -221,10 +226,10 @@
                 const building_name = this.getRootNode().host.name
                 const field_name = e.target.assignedNodes()[0].textContent.trim()
                 game.on(`${building_name}.detail`, this.detail_callback = details => {
-                    if (field_name.includes('.')) {
+                    if (field_name.includes('.')) { // costs and products
                         const [field, resource] = field_name.split('.')
                         this.shadowRoot.querySelector('span').innerHTML = details[field]?.[resource]?.[0]
-                    } else {
+                    } else { // build_cost and upgrade_cost
                         let content = ''
                         for (const [resource, [amount, sufficient]] of Object.entries(details[field_name] ?? {})) {
                             if (content != '') content += '<br>'
@@ -270,5 +275,10 @@
             building.id = `building-${building_def.name}`
             document.querySelector('#building-card').append(building)
         }
+    })
+
+    game.on('building.details', card.detail_callback = () => {
+        for (const building of card.querySelectorAll('ca-building.expanded'))
+            game.poll_with_message(`${building.name}.detail`)
     })
 </script>

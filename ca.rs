@@ -464,6 +464,15 @@ struct Building {
     detail: JsonValue
 }
 
+new_usize_type!(pub, RelicId);
+
+struct Relic {
+    name: &'static str,
+    display_name: JsonValue,
+    passive: bool,
+    detail: JsonValue
+}
+
 /// simple serializable enum value
 #[derive(Clone, Copy)]
 enum SValue {
@@ -559,6 +568,7 @@ impl FromStr for SValue {
 struct GameDef {
     resources: Vec<Resource>,
     buildings: Vec<Building>,
+    relics: Vec<Relic>,
     handlers: BTreeMap<String, Vec<Box<dyn Fn(&mut Game, &JsonValue)>>>
 }
 
@@ -578,11 +588,20 @@ impl Index<BuildingId> for GameDef {
     }
 }
 
+impl Index<RelicId> for GameDef {
+    type Output = Relic;
+
+    fn index(&self, index: RelicId) -> &Self::Output {
+        &self.relics[index.0]
+    }
+}
+
 impl GameDef {
     const fn new() -> Self {
         Self {
             resources: Vec::new(),
             buildings: Vec::new(),
+            relics: Vec::new(),
             handlers: BTreeMap::new()
         }
     }
@@ -625,6 +644,10 @@ fn init_game_def() {
         panic!("checkpoint event should not be dispatched!");
     }));
 
+    game_def.add_handler("persistent_state", Box::new(move |game, persistent_state| {
+        game.load_persistent_state(persistent_state)
+    }));
+
     game_def.add_handler("init", Box::new(move |game, _| {
         game.post_message_to_front("init", json!({
             "resource_defs": game_def!().resources.iter().map(|r| json!({
@@ -637,6 +660,13 @@ fn init_game_def() {
                 "display_name": b.display_name,
                 "max_level": b.max_level,
                 "detail": b.detail
+            })).collect::<Vec<_>>(),
+
+            "relic_defs": game_def!().relics.iter().map(|r| json!({
+                "name": r.name,
+                "display_name": r.display_name,
+                "passive": r.passive,
+                "detail": r.detail
             })).collect::<Vec<_>>(),
         }));
     }));
@@ -724,19 +754,207 @@ fn init_game_def() {
     });
 
 
-    fn add_building(
+
+    fn add_relic(
+        game_def: &mut GameDef,
+        relic: Relic,
+        forge_condition_fun: Rc<dyn Fn(&Game) -> bool>,
+        forge_effect_fun: Rc<dyn Fn(&mut Game)>,
+        activate_condition_fun: Rc<dyn Fn(&Game) -> bool>,
+        activate_effect_fun: Rc<dyn Fn(&mut Game)>,
+        cooldown_fun: Rc<dyn Fn(&Game) -> u32>,
+        detail_fun: Rc<dyn Fn(&Game) -> JsonValue>
+    ) -> RelicId {
+        let name = relic.name;
+        let passive = relic.passive;
+
+        let id = RelicId(game_def.relics.len());
+        game_def.relics.push(relic);
+
+        game_def.add_handler(format!("{name}.forge"), {
+            let forge_condition_fun = forge_condition_fun.clone();
+            let forge_effect_fun = forge_effect_fun.clone();
+
+            Box::new(move |game, _| {
+                if !game[id].get("unlocked").map_or(false, |x| x.as_bool()) || game[id].get("forged").map_or(false, |x| x.as_bool()) {
+                    return
+                }
+
+                if !forge_condition_fun(game) {
+                    game.post_message_to_front("log", json!({
+                        "en": format!("Cannot forge {}", game_def!(id).display_name["en"].as_str().unwrap()),
+                        "zh": format!("无法锻造{}", game_def!(id).display_name["zh"].as_str().unwrap())
+                    }));
+                    return
+                }
+
+                forge_effect_fun(game);
+
+                game[id].insert("forged".to_string(), SValue::Bool(true));
+                game.post_relic_properties(id);
+            })
+        });
+
+        game_def.add_handler(format!("{name}.devforge"), {
+            let _forge_effect_fun = forge_effect_fun.clone();
+
+            Box::new(move |game, _| {
+                game[id].insert("forged".to_string(), SValue::Bool(true));
+                game.post_relic_properties(id);
+            })
+        });
+
+        game_def.add_handler(format!("{name}.activate"), {
+            let activate_condition_fun = activate_condition_fun.clone();
+            let cooldown_fun = cooldown_fun.clone();
+
+            Box::new(move |game, _| {
+                if !game[id].get("forged").map_or(false, |x| x.as_bool()) || passive {
+                    return
+                }
+
+                if game[id].get("cooldown_at").map_or(0, |x| x.as_int()) > game.day {
+                    game.post_message_to_front("log", json!({
+                        "en": format!("{} is still cooling down.", game_def!(id).display_name["en"].as_str().unwrap()),
+                        "zh": format!("{}还在冷却中。", game_def!(id).display_name["zh"].as_str().unwrap())
+                    }));
+                    return
+                }
+
+                if !activate_condition_fun(game) {
+                    game.post_message_to_front("log", json!({
+                        "en": format!("Cannot activate {}", game_def!(id).display_name["en"].as_str().unwrap()),
+                        "zh": format!("无法激活{}", game_def!(id).display_name["zh"].as_str().unwrap())
+                    }));
+                    return
+                }
+
+                activate_effect_fun(game);
+
+                let cooldown_time = game.day + cooldown_fun(game);
+                game[id].insert("cooldown_at".to_string(), SValue::Int(cooldown_time));
+                game.post_relic_properties(id);
+            })
+        });
+
+        game_def.add_handler(format!("{name}.detail"), Box::new(move |game, _| {
+            game.post_message_to_front(&format!("{name}.detail"), detail_fun(game));
+        }));
+
+        id
+    }
+
+
+    let relic_coupon_id = RelicId(game_def.relics.len());
+    add_relic(game_def, Relic {
+        name: "coupon",
+        display_name: json!({
+            "en": "Kids Coupon",
+            "zh": "儿童优惠券",
+        }),
+        passive: true,
+        detail: json!({
+            "description": {
+                "en": r#"50% discount for all building and upgrading costs before Day 6570."#,
+                "zh": r#"在第6570天前，所有建筑建造和升级的成本减半。"#,
+            },
+            "forge_condition": {
+                "en": r#"<ca-relic-detail-slot>forge_cost.metal</ca-relic-detail-slot> <ca-resource>metal</ca-resource>"#,
+                "zh": r#"<ca-relic-detail-slot>forge_cost.metal</ca-relic-detail-slot><ca-resource>metal</ca-resource>"#,
+            },
+            "activate_condition": {
+                "en": r#""#,
+                "zh": r#""#,
+            },
+            "cooldown": {
+                "en": r#""#,
+                "zh": r#""#,
+            }
+        }),
+    },
+    // forge_condition_fun
+    Rc::new(move |game| game[resource_metal_id] >= ExpNum::from_exp(20.)),
+    // forge_effect_fun
+    Rc::new(move |game| {
+        game[resource_metal_id] -= ExpNum::from_exp(20.);
+        game.post_message_to_front("building.details", JsonNull) // ask front end to update building details
+    }),
+    // activate_condition_fun
+    Rc::new(move |_game| false),
+    // activate_effect_fun
+    Rc::new(move |_game| {}),
+    // cooldown_fun
+    Rc::new(move |_game| 0),
+    // detail_fun
+    Rc::new(move |game| json!({
+        "forge_cost.metal": ExpNum::from_exp(20.).format_with_preference(&game.format_preference, "html")
+    })));
+
+    let wrap_cost_fun_with_relic_coupon = |cost_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>| -> Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>> {
+        Rc::new(move |game| {
+            let mut costs = cost_fun(game);
+            if game[relic_coupon_id].get("forged").map_or(false, |x| x.as_bool()) && game.day <= 6570 {
+                for (_, cost) in costs.iter_mut() {
+                    *cost /= ExpNum::from(2.);
+                }
+            }
+            costs
+        })
+    };
+
+    game_def.add_handler("init", Box::new(move |game, _| {
+        game[relic_coupon_id].insert("unlocked".to_string(), SValue::Bool(true));
+        game.post_relic_properties(relic_coupon_id);
+    }));
+
+    // let relic_pstone_id = RelicId(game_def.relics.len());
+    // game_def.relics.push(game_def, Relic {
+    //     name: "pstone",
+    //     display_name: json!({
+    //         "en": "Philosopher's Stone",
+    //         "zh": "贤者之石",
+    //     }),
+    //     activatable: true,
+    //     detail: json!({
+    //         "description": {
+    //             "en": r#"Converts half of <ca-resource>earth</ca-resource> into <ca-resource>metal</ca-resource>"#,
+    //             "zh": r#"将一半的<ca-resource>earth</ca-resource>转化为<ca-resource>metal</ca-resource>"#,
+    //         },
+    //         "forge_cost": {
+    //             "en": r#"<ca-katex>2 ^ {{\text{{day}}}}</ca-katex> = <ca-relic-detail-slot>forge_cost.man</ca-relic-detail-slot> <ca-resource>man</ca-resource>"#,
+    //             "zh": r#""#,
+    //         },
+    //         "activate_cost": {
+    //             "en": r#""#,
+    //             "zh": r#""#,
+    //         },
+    //         "cooldown": {
+    //             "en": r#""#,
+    //             "zh": r#""#,
+    //         }
+    //     }),
+    // }, 
+
+    // );
+
+
+
+    let add_building = |
         game_def: &mut GameDef,
         building: Building,
         cost_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>,
         product_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>,
         upgrade_cost_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>,
         build_cost_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>
-    ) -> BuildingId {
+    | -> BuildingId {
         let name = building.name;
         let max_level = building.max_level;
 
         let id = BuildingId(game_def.buildings.len());
         game_def.buildings.push(building);
+
+        let upgrade_cost_fun = wrap_cost_fun_with_relic_coupon(upgrade_cost_fun);
+        let build_cost_fun = wrap_cost_fun_with_relic_coupon(build_cost_fun);
 
         game_def.add_handler("step".to_string(), {
             let cost_fun = cost_fun.clone();
@@ -896,7 +1114,7 @@ fn init_game_def() {
                     return;
                 }
 
-                let mut info = json!({
+                let mut detail = json!({
                     "cost": {},
                     "product": {},
                     "build_cost": {},
@@ -908,13 +1126,13 @@ fn init_game_def() {
                         let name = game_def!(resource_id).name;
                         let sufficient = game[resource_id] >= amount;
                         let amount = amount.format_with_preference(&game.format_preference, "html");
-                        info["cost"][name] = json!([amount, sufficient]);
+                        detail["cost"][name] = json!([amount, sufficient]);
                     }
 
                     for (resource_id, amount) in product_fun(game) {
                         let name = game_def!(resource_id).name;
                         let amount = amount.format_with_preference(&game.format_preference, "html");
-                        info["product"][name] = json!([amount, true]);
+                        detail["product"][name] = json!([amount, true]);
                     }
 
                     if game[id]["level"].as_int() < max_level {
@@ -922,7 +1140,7 @@ fn init_game_def() {
                             let name = game_def!(resource_id).name;
                             let sufficient = game[resource_id] >= amount;
                             let amount = amount.format_with_preference(&game.format_preference, "html");
-                            info["upgrade_cost"][name] = json!([amount, sufficient]);
+                            detail["upgrade_cost"][name] = json!([amount, sufficient]);
                         }
                     }
                 } else {
@@ -930,16 +1148,16 @@ fn init_game_def() {
                         let name = game_def!(resource_id).name;
                         let sufficient = game[resource_id] >= amount;
                         let amount = amount.format_with_preference(&game.format_preference, "html");
-                        info["build_cost"][name] = json!([amount, sufficient]);
+                        detail["build_cost"][name] = json!([amount, sufficient]);
                     }
                 }
 
-                game.post_message_to_front(&format!("{name}.detail"), info);
+                game.post_message_to_front(&format!("{name}.detail"), detail);
             })
         });
 
         id
-    }
+    };
 
 
     let building_tent_id = BuildingId(game_def.buildings.len());
@@ -1513,6 +1731,13 @@ fn init_game_def() {
     }));
 
 
+
+
+
+
+
+
+
 }
 
 
@@ -1523,6 +1748,7 @@ struct Game {
     day: u32,
     resources: Vec<ExpNum>,
     buildings: Vec<BTreeMap<String, SValue>>,
+    relics: Vec<BTreeMap<String, SValue>>,
     incomes: Vec<Vec<[SignedExpNum; 10]>>, // [resource][building][ring buffer]
 
     format_preference: Vec<String>,
@@ -1538,6 +1764,7 @@ impl Game {
             day: 0,
             resources: game_def!().resources.iter().map(|_| ExpNum::from(0.)).collect(),
             buildings: game_def!().buildings.iter().map(|_| BTreeMap::new()).collect(),
+            relics: game_def!().relics.iter().map(|_| BTreeMap::new()).collect(),
             incomes: game_def!().resources.iter().map(|_|
                 game_def!().buildings.iter().map(|_| [SignedExpNum::positive_zero(); 10]).collect()
             ).collect(),
@@ -1595,14 +1822,21 @@ impl Game {
     }
 
     fn post_building_properties(&mut self, building_id: BuildingId) {
-        let name = game_def!(BuildingId(building_id.0)).name;
+        let name = game_def!(building_id).name;
         self.post_message_to_front(&format!("{name}.properties"), self.buildings[building_id.0].iter().map(|(k, v)| {
             (k.to_string(), v.to_string())
         }).collect());
     }
 
+    fn post_relic_properties(&mut self, relic_id: RelicId) {
+        let name = game_def!(relic_id).name;
+        self.post_message_to_front(&format!("{name}.properties"), self.relics[relic_id.0].iter().map(|(k, v)| {
+            (k.to_string(), v.to_string())
+        }).collect());
+    }
+
     // max_days is included
-    fn fast_forward(&mut self, packed_events: Vec<JsonValue>, max_days: u32) {
+    fn fast_forward(&mut self, packed_events: Vec<JsonValue>, max_days: u32, persistent_state: Option<JsonValue>) {
         // load from last checkpoint. i is the index of the last checkpoint day
         let mut i = packed_events.len();
         assert_eq!(i % 3, 0);
@@ -1650,6 +1884,11 @@ impl Game {
         if i >= 3 && self.history[i - 2].as_str().unwrap() == "dummy" {
             self.history.truncate(i - 3);
         }
+
+        if let Some(persistent_state) = persistent_state {
+            self.dispatch_message("persistent_state", &persistent_state);
+            self.push_history("persistent_state", persistent_state)
+        }
     }
 
     fn post_everything(&mut self) {
@@ -1658,6 +1897,9 @@ impl Game {
         self.post_incomes();
         for (i, _) in game_def!().buildings.iter().enumerate() {
             self.post_building_properties(BuildingId(i));
+        }
+        for (i, _) in game_def!().relics.iter().enumerate() {
+            self.post_relic_properties(RelicId(i));
         }
     }
 
@@ -1669,6 +1911,11 @@ impl Game {
             }).collect::<BTreeMap<String, f64>>(),
             "buildings": self.buildings.iter().enumerate().map(|(i, b)| {
                 (game_def!(BuildingId(i)).name.to_string(), b.iter().map(|(k, v)| {
+                    (k.to_string(), v.to_string())
+                }).collect::<BTreeMap<String, String>>())
+            }).collect::<BTreeMap<String, _>>(),
+            "relics": self.relics.iter().enumerate().map(|(i, b)| {
+                (game_def!(RelicId(i)).name.to_string(), b.iter().map(|(k, v)| {
                     (k.to_string(), v.to_string())
                 }).collect::<BTreeMap<String, String>>())
             }).collect::<BTreeMap<String, _>>(),
@@ -1693,6 +1940,13 @@ impl Game {
             let bid = game_def!().buildings.iter().position(|b| b.name == building_name).unwrap();
             for (property_name, value) in properties.as_object().unwrap().iter() {
                 self[BuildingId(bid)].insert(property_name.to_string(), value.as_str().unwrap().parse().unwrap());
+            }
+        }
+
+        for (relic_name, properties) in state["relics"].as_object().unwrap().iter() {
+            let rid = game_def!().relics.iter().position(|r| r.name == relic_name).unwrap();
+            for (property_name, value) in properties.as_object().unwrap().iter() {
+                self[RelicId(rid)].insert(property_name.to_string(), value.as_str().unwrap().parse().unwrap());
             }
         }
 
@@ -1744,6 +1998,23 @@ impl Game {
         }
         self.post_message_to_front("incomes", json!(all_incomes));
     }
+
+    // states that persist across time warppings
+    fn dump_persistent_state(&mut self) -> JsonValue {
+        return json!({
+            "forged_relics": self.relics.iter().enumerate()
+                .filter(|(_, r)| r.get("forged").map_or(false, |x| x.as_bool()))
+                .map(|(i, _)| game_def!(RelicId(i)).name).collect::<Vec<_>>(),
+        });
+    }
+
+    fn load_persistent_state(&mut self, state: &JsonValue) {
+        for relic_name in state["forged_relics"].as_array().unwrap().iter().map(|x| x.as_str().unwrap()) {
+            let rid = game_def!().relics.iter().position(|r| r.name == relic_name).unwrap();
+            self[RelicId(rid)].insert("unlocked".into(), SValue::Bool(true));
+            self[RelicId(rid)].insert("forged".into(), SValue::Bool(true));
+        }
+    }
 }
 
 impl Index<ResourceId> for Game {
@@ -1771,6 +2042,20 @@ impl Index<BuildingId> for Game {
 impl IndexMut<BuildingId> for Game {
     fn index_mut(&mut self, index: BuildingId) -> &mut Self::Output {
         &mut self.buildings[index.0]
+    }
+}
+
+impl Index<RelicId> for Game {
+    type Output = BTreeMap<String, SValue>;
+
+    fn index(&self, index: RelicId) -> &Self::Output {
+        &self.relics[index.0]
+    }
+}
+
+impl IndexMut<RelicId> for Game {
+    fn index_mut(&mut self, index: RelicId) -> &mut Self::Output {
+        &mut self.relics[index.0]
     }
 }
 
@@ -1826,7 +2111,7 @@ unsafe extern fn game_load(game: *mut Game) {
     let game = &mut *game;
     assert!(game.history.is_empty());
     if let Ok(mut history) = read_json_buffer() {
-        game.fast_forward(std::mem::take(history.as_array_mut().unwrap()), u32::MAX);
+        game.fast_forward(std::mem::take(history.as_array_mut().unwrap()), u32::MAX, None);
         game.post_everything();
         write_json_buffer(&std::mem::take(&mut game.message_queue).into());
     } else {
@@ -1837,10 +2122,11 @@ unsafe extern fn game_load(game: *mut Game) {
 #[no_mangle]
 unsafe extern fn game_timewarp(game: *mut Game, day: u32) {
     let game = &mut *game;
+    let persistent_state = game.dump_persistent_state();
     game.push_history("dummy", JsonNull);
     let history = std::mem::take(&mut game.history);
     *game = Game::new();
-    game.fast_forward(history, day); // fast_forward automatically trim the dummy event
+    game.fast_forward(history, day, Some(persistent_state)); // fast_forward automatically trim the dummy event
     game.post_everything();
     write_json_buffer(&std::mem::take(&mut game.message_queue).into());
 }

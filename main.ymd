@@ -36,6 +36,7 @@ window.ca = x.instance.exports
 
 </div> <div class="column">
 
+[require](relics.html)
 [require](log.html)
 [require](settings.html)
 
