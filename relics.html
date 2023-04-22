@@ -25,9 +25,13 @@
             font-weight: bold;
         }
         .header .cooldown {
+            display: none;
             font-size: .8em;
         }
-        :host(.passive) .cooldown {
+        :host(.forged) .header .cooldown {
+            display: inline;
+        }
+        :host(.forged.passive) .header .cooldown {
             display: none;
         }
         .detail {
@@ -186,9 +190,9 @@
         }
 
         update_cooldown() {
-            if (!this.cooldown_at || !this.day) return
+            if (this.day === undefined) return
 
-            const cooldown = this.cooldown_at - this.day
+            const cooldown = (this.cooldown_at ?? 0) - this.day
             if (cooldown <= 0) {
                 this.shadowRoot.querySelector('.header .cooldown').dataset.zh = `（冷却完毕）`
                 this.shadowRoot.querySelector('.header .cooldown').dataset.en = ` (Ready) `
