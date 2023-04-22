@@ -8,7 +8,7 @@
 use std::{collections::BTreeMap, fmt::Debug, ops::{Index, IndexMut}, rc::Rc, f64::consts::LN_10, borrow::Borrow, str::FromStr};
 use serde_json::{json, Value as JsonValue, Value::Null as JsonNull};
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, Copy)]
 struct ExpNum(f64);
 
 static NUMBER_FORMAT_CUTOFF: [ExpNum; 5] = [ // unfortunately float arithmetic is not const
@@ -223,6 +223,26 @@ impl std::ops::MulAssign for ExpNum {
 impl std::ops::DivAssign for ExpNum {
     fn div_assign(&mut self, rhs: Self) {
         *self = *self / rhs;
+    }
+}
+
+impl PartialEq for ExpNum {
+    fn eq(&self, other: &Self) -> bool {
+        if self.is_zero() {
+            return other.is_zero();
+        }
+        self.0 == other.0
+    }
+}
+
+impl Eq for ExpNum {}
+
+impl PartialOrd for ExpNum {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        if self.is_zero() && other.is_zero() {
+            return Some(std::cmp::Ordering::Equal);
+        }
+        self.0.partial_cmp(&other.0)
     }
 }
 
@@ -837,9 +857,19 @@ fn init_game_def() {
             })
         });
 
-        game_def.add_handler(format!("{name}.detail"), Box::new(move |game, _| {
-            game.post_message_to_front(&format!("{name}.detail"), detail_fun(game));
-        }));
+        game_def.add_handler(format!("{name}.detail"), {
+            let forge_condition_fun = forge_condition_fun.clone();
+            let activate_condition_fun = activate_condition_fun.clone();
+            let cooldown_fun = cooldown_fun.clone();
+
+            Box::new(move |game, _| {
+                let mut details = detail_fun(game);
+                details["forgable"] = forge_condition_fun(game).into();
+                details["activatable"] = activate_condition_fun(game).into();
+                details["cooldown"] = cooldown_fun(game).into();
+                game.post_message_to_front(&format!("{name}.detail"), details);
+            })
+        });
 
         id
     }
@@ -907,35 +937,70 @@ fn init_game_def() {
         game.post_relic_properties(relic_coupon_id);
     }));
 
-    // let relic_pstone_id = RelicId(game_def.relics.len());
-    // game_def.relics.push(game_def, Relic {
-    //     name: "pstone",
-    //     display_name: json!({
-    //         "en": "Philosopher's Stone",
-    //         "zh": "贤者之石",
-    //     }),
-    //     activatable: true,
-    //     detail: json!({
-    //         "description": {
-    //             "en": r#"Converts half of <ca-resource>earth</ca-resource> into <ca-resource>metal</ca-resource>"#,
-    //             "zh": r#"将一半的<ca-resource>earth</ca-resource>转化为<ca-resource>metal</ca-resource>"#,
-    //         },
-    //         "forge_cost": {
-    //             "en": r#"<ca-katex>2 ^ {{\text{{day}}}}</ca-katex> = <ca-relic-detail-slot>forge_cost.man</ca-relic-detail-slot> <ca-resource>man</ca-resource>"#,
-    //             "zh": r#""#,
-    //         },
-    //         "activate_cost": {
-    //             "en": r#""#,
-    //             "zh": r#""#,
-    //         },
-    //         "cooldown": {
-    //             "en": r#""#,
-    //             "zh": r#""#,
-    //         }
-    //     }),
-    // }, 
 
-    // );
+    let relic_pstone_id = RelicId(game_def.relics.len());
+    add_relic(game_def, Relic {
+        name: "pstone",
+        display_name: json!({
+            "en": "Philosopher's Stone",
+            "zh": "贤者之石",
+        }),
+        passive: false,
+        detail: json!({
+            "description": {
+                "en": r#"Converts half of <ca-resource>man</ca-resource> into the least abundant resource among <ca-resource>metal</ca-resource>, <ca-resource>wood</ca-resource>, <ca-resource>water</ca-resource>, <ca-resource>fire</ca-resource>, and <ca-resource>earth</ca-resource>."#,
+                "zh": r#"将一半的<ca-resource>man</ca-resource>转化为<ca-resource>metal</ca-resource><ca-resource>wood</ca-resource><ca-resource>water</ca-resource><ca-resource>fire</ca-resource><ca-resource>earth</ca-resource>中最少的资源。"#,
+            },
+            "forge_condition": {
+                "en": r#"<ca-relic-detail-slot>forge_cost.man</ca-relic-detail-slot> <ca-resource>man</ca-resource>"#,
+                "zh": r#"<ca-relic-detail-slot>forge_cost.man</ca-relic-detail-slot><ca-resource>man</ca-resource>"#,
+            },
+            "activate_condition": {
+                "en": r#""#,
+                "zh": r#""#,
+            },
+            "cooldown": {
+                "en": r#"<ca-katex>1 + \lfloor\sqrt{{\text{{Day}}}}\rfloor</ca-katex> = <ca-relic-detail-slot>cooldown</ca-relic-detail-slot> Days"#,
+                "zh": r#"<ca-katex>1 + \lfloor\sqrt{{\text{{\footnotesize 天数}}}}\rfloor</ca-katex> = <ca-relic-detail-slot>cooldown</ca-relic-detail-slot>天"#,
+            }
+        }),
+    },
+    // forge_condition_fun
+    Rc::new(move |game| game[resource_man_id] >= ExpNum::from_exp(20.)),
+    // forge_effect_fun
+    Rc::new(move |game| game[resource_man_id] -= ExpNum::from_exp(20.)),
+    // activate_condition_fun
+    Rc::new(move |_game| true),
+    // activate_effect_fun
+    Rc::new(move |game| {
+        let least_owned_resource_id = [
+            resource_metal_id,
+            resource_wood_id,
+            resource_water_id,
+            resource_fire_id,
+            resource_earth_id,
+        ].into_iter().min_by(|&x, &y| game[x].partial_cmp(&game[y]).unwrap()).unwrap();
+
+        let half_man = game[resource_man_id] / ExpNum::from(2.);
+        game[resource_man_id] -= half_man;
+        game[least_owned_resource_id] += half_man;
+    }),
+    // cooldown_fun
+    Rc::new(move |game| 1 + (game.day as f64).sqrt().floor() as u32),
+    // detail_fun
+    Rc::new(move |game| json!({
+        "forge_cost.man": ExpNum::from_exp(20.).format_with_preference(&game.format_preference, "html"),
+        "cooldown": 1 + (game.day as f64).sqrt().floor() as u32,
+    })));
+
+    game_def.add_handler("smelter.built", Box::new(move |game, _| {
+        if game[relic_pstone_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+            return;
+        }
+        game[relic_pstone_id].insert("unlocked".to_string(), SValue::Bool(true));
+        game.post_relic_properties(relic_pstone_id);
+    }));
+
 
 
 
@@ -1589,7 +1654,7 @@ fn init_game_def() {
             },
             "product": {
                 "en": r#"<ca-katex>2 ^ {{\text{{level}} + 9}}</ca-katex> = <ca-building-detail-slot>product.metal</ca-building-detail-slot> <ca-resource>metal</ca-resource>"#,
-                "zh": r#"<ca-katex>2 ^ {{\text{{\footnotesize 等级}} + 9}}</ca-katex> = <ca-building-detail-slot>product.metal</ca-building-detail-slot> <ca-resource>metal</ca-resource>"#,
+                "zh": r#"<ca-katex>2 ^ {{\text{{\tiny 等级}} + 9}}</ca-katex> = <ca-building-detail-slot>product.metal</ca-building-detail-slot> <ca-resource>metal</ca-resource>"#,
             }
         })
     },

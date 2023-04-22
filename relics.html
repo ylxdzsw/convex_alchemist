@@ -78,8 +78,8 @@
     </style>
 
     <div class="header">
-        <span><ca-text class="name"></ca-text></span>
-        <span class="cooldown"></span>
+        <ca-text class="name"></ca-text>
+        <ca-text class="cooldown"></ca-text>
     </div>
 
     <div class="body">
@@ -133,6 +133,11 @@
                     game.poll_with_message(`${this.name}.detail`)
             })
 
+            game.on(`${this.name}.detail`, this.detail_callback = details => {
+                this.shadowRoot.querySelector('button.forge').disabled = !details.forgable
+                this.shadowRoot.querySelector('button.activate').disabled = !details.activatable
+            })
+
             const detail = this.shadowRoot.querySelector('.detail')
             detail.querySelector('.description').innerHTML = this.detail.description[game.lang] ?? this.detail.description['zh']
             detail.querySelector('.forge-condition .content').innerHTML = this.detail.forge_condition[game.lang] ?? this.detail.forge_condition['zh']
@@ -173,6 +178,8 @@
 
             game.on('reset', this.reset_callback = () => {
                 this.classList.remove('unlocked', 'forged', 'expanded', 'cooling-down')
+                for (const lang in this.shadowRoot.querySelector('.header .cooldown').dataset)
+                    this.shadowRoot.querySelector('.header .cooldown').dataset[lang] = ''
                 this.cooldown_at = this.day = null
                 this.update_cooldown()
             })
@@ -183,12 +190,12 @@
 
             const cooldown = this.cooldown_at - this.day
             if (cooldown <= 0) {
-                for (const lang in this.shadowRoot.querySelector('.header .cooldown').dataset)
-                    this.shadowRoot.querySelector('.header .cooldown').dataset[lang] = ''
+                this.shadowRoot.querySelector('.header .cooldown').dataset.zh = `（冷却完毕）`
+                this.shadowRoot.querySelector('.header .cooldown').dataset.en = ` (Ready) `
                 this.classList.remove('cooling-down')
             } else {
                 this.shadowRoot.querySelector('.header .cooldown').dataset.zh = `（冷却：${cooldown}天）`
-                this.shadowRoot.querySelector('.header .cooldown').dataset.en = ` (CD: ${cooldown} days) `
+                this.shadowRoot.querySelector('.header .cooldown').dataset.en = ` (Cooldown: ${cooldown} days) `
                 this.classList.add('cooling-down')
             }
         }
@@ -214,6 +221,7 @@
                 game.on(`${relic_name}.detail`, this.detail_callback = details => {
                     switch (typeof details[field_name]) {
                         case 'string':
+                        case 'number':
                             this.shadowRoot.querySelector('span').innerHTML = details[field_name]
                             break
                         case 'object':

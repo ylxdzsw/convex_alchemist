@@ -142,6 +142,8 @@ const game = {
         game.poll_with_message('step')
         for (const building of document.querySelectorAll('ca-building.expanded'))
             game.poll_with_message(`${building.name}.detail`)
+        for (const relic of document.querySelectorAll('ca-relic.expanded'))
+            game.poll_with_message(`${relic.name}.detail`)
         if (Date.now() - game.last_autosave > 5000) {
             game.save_to_local_storage() // no wait
             game.last_autosave = Date.now()
