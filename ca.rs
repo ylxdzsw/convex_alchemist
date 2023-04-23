@@ -126,6 +126,22 @@ impl ExpNum {
         }
         return self.format(preference[i].borrow(), output_type);
     }
+
+    fn saturating_sub(self, rhs: Self) -> Self {
+        if self.is_zero() {
+            return Self::zero();
+        }
+
+        if rhs.is_zero() {
+            return self;
+        }
+
+        if self.0 < rhs.0 {
+            return Self::zero();
+        }
+
+        self - rhs
+    }
 }
 
 impl From<f64> for ExpNum {
@@ -816,9 +832,10 @@ fn init_game_def() {
         });
 
         game_def.add_handler(format!("{name}.devforge"), {
-            let _forge_effect_fun = forge_effect_fun.clone();
+            let forge_effect_fun = forge_effect_fun.clone();
 
             Box::new(move |game, _| {
+                forge_effect_fun(game);
                 game[id].insert("forged".to_string(), SValue::Bool(true));
                 game.post_relic_properties(id);
             })
@@ -906,7 +923,7 @@ fn init_game_def() {
     Rc::new(move |game| game[resource_metal_id] >= ExpNum::from_exp(20.)),
     // forge_effect_fun
     Rc::new(move |game| {
-        game[resource_metal_id] -= ExpNum::from_exp(20.);
+        // no need to pay the cost; the user can always warp one day back to reclaim the expense while keeping the relic.
         game.post_message_to_front("building.details", JsonNull) // ask front end to update building details
     }),
     // activate_condition_fun
@@ -968,7 +985,7 @@ fn init_game_def() {
     // forge_condition_fun
     Rc::new(move |game| game[resource_man_id] >= ExpNum::from_exp(20.)),
     // forge_effect_fun
-    Rc::new(move |game| game[resource_man_id] -= ExpNum::from_exp(20.)),
+    Rc::new(move |_game| {}),
     // activate_condition_fun
     Rc::new(move |_game| true),
     // activate_effect_fun
@@ -1001,6 +1018,68 @@ fn init_game_def() {
         game.post_relic_properties(relic_pstone_id);
     }));
 
+
+    let relic_taichi_id = RelicId(game_def.relics.len());
+    add_relic(game_def, Relic {
+        name: "taichi",
+        display_name: json!({
+            "en": "Taichi Amulet",
+            "zh": "太极护符",
+        }),
+        passive: false,
+        detail: json!({
+            "description": {
+                "en": r#"Exchange <ca-resource>yin</ca-resource> and <ca-resource>yang</ca-resource>."#,
+                "zh": r#"交换<ca-resource>yin</ca-resource>和<ca-resource>yang</ca-resource>。"#,
+            },
+            "forge_condition": {
+                "en": r#"<ca-katex>\frac{{\text{{Yin}}}}{{\text{{Yang}}}} \geq </ca-katex> <ca-relic-detail-slot>forge_cost.ratio</ca-relic-detail-slot> or<br><ca-katex>\frac{{\text{{Yang}}}}{{\text{{Yin}}}} \geq </ca-katex> <ca-relic-detail-slot>forge_cost.ratio</ca-relic-detail-slot>"#,
+                "zh": r#"<ca-katex display>\frac{{\text{{\footnotesize 阴}}}}{{\text{{\footnotesize 阳}}}} \geq </ca-katex> <ca-relic-detail-slot>forge_cost.ratio</ca-relic-detail-slot> 或<br><ca-katex display>\frac{{\text{{\footnotesize 阳}}}}{{\text{{\footnotesize 阴}}}} \geq </ca-katex> <ca-relic-detail-slot>forge_cost.ratio</ca-relic-detail-slot>"#,
+            },
+            "activate_condition": {
+                "en": r#""#,
+                "zh": r#""#,
+            },
+            "cooldown": {
+                "en": r#"<ca-katex>1 + \lfloor\text{{Day}}^{{0.8}}\rfloor</ca-katex> = <ca-relic-detail-slot>cooldown</ca-relic-detail-slot> Days"#,
+                "zh": r#"<ca-katex>1 + \lfloor\text{{\footnotesize 天数}}^{{0.8}}\rfloor</ca-katex> = <ca-relic-detail-slot>cooldown</ca-relic-detail-slot>天"#,
+            }
+        }),
+    },
+    // forge_condition_fun
+    Rc::new(move |game| {
+        let yin = game[resource_yin_id];
+        let yang = game[resource_yang_id];
+        let ratio = ExpNum::from_exp(15);
+        yin >= yang * ratio || yang >= yin * ratio
+    }),
+    // forge_effect_fun
+    Rc::new(move |_game| {}),
+    // activate_condition_fun
+    Rc::new(move |_game| true),
+    // activate_effect_fun
+    Rc::new(move |game| {
+        let yin = game[resource_yin_id];
+        let yang = game[resource_yang_id];
+
+        game[resource_yin_id] = yang;
+        game[resource_yang_id] = yin;
+    }),
+    // cooldown_fun
+    Rc::new(move |game| 1 + (game.day as f64).powf(0.8).floor() as u32),
+    // detail_fun
+    Rc::new(move |game| json!({
+        "forge_cost.ratio": ExpNum::from_exp(15).format_with_preference(&game.format_preference, "html"),
+        "cooldown": 1 + (game.day as f64).powf(0.8).floor() as u32,
+    })));
+
+    game_def.add_handler("armilla.built", Box::new(move |game, _| {
+        if game[relic_taichi_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+            return;
+        }
+        game[relic_taichi_id].insert("unlocked".to_string(), SValue::Bool(true));
+        game.post_relic_properties(relic_taichi_id);
+    }));
 
 
 
@@ -1310,14 +1389,7 @@ fn init_game_def() {
     Rc::new(move |game| {
         let level = game[building_forest_id]["level"].as_int();
         let man = game[resource_man_id];
-        let a = ExpNum::from(2.).pow(level + 10);
-        let b = man.pow(0.8);
-        let product = if a > b {
-            a - b
-        } else {
-            ExpNum::from(0.)
-        };
-        vec![(resource_wood_id, product)]
+        vec![(resource_wood_id, ExpNum::from(2.).pow(level + 10).saturating_sub(man.pow(0.8)) )]
     }),
     // upgrade cost
     Rc::new(move |game| {
@@ -1364,7 +1436,7 @@ fn init_game_def() {
             },
             "product": {
                 "en": r#"<ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{Water}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex style="line-height: 2">2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{Earth}} + 1}}{{\text{{Water}} + \text{{Earth}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
-                "zh": r#"<ca-katex>2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{水}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex style="line-height: 2">2 ^ {{\text{{level}} + 8}} \times \frac{{\text{{土}} + 1}}{{\text{{水}} + \text{{土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+                "zh": r#"<ca-katex display>2 ^ {{\text{{\tiny 等级}} + 8}} \times \frac{{\text{{\footnotesize 水}} + 1}}{{\text{{\footnotesize 水}} + \text{{\footnotesize 土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex display>2 ^ {{\text{{\tiny 等级}} + 8}} \times \frac{{\text{{\footnotesize 土}} + 1}}{{\text{{\footnotesize 水}} + \text{{\footnotesize 土}} + 1}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
             }
         })
     },
@@ -1712,8 +1784,8 @@ fn init_game_def() {
                 "zh": r#""#,
             },
             "product": {
-                "en": r#"<ca-katex>\text{{level}}\%</ca-katex> chance: <ca-katex>\text{{Yang}}^\alpha</ca-katex> <ca-resource>man</ca-resource><br><ca-katex>\alpha = \frac{{1}}{{\log_2 2.2}} \approx 0.88</ca-katex>"#,
-                "zh": r#"<ca-katex>\text{{\footnotesize 等级}}\%</ca-katex>几率：<ca-katex>\text{{\footnotesize 阳}}^\alpha</ca-katex> <ca-resource>man</ca-resource><br><ca-katex>\alpha = \frac{{1}}{{\log_2 2.2}} \approx 0.88</ca-katex>"#,
+                "en": r#"<ca-katex>\text{{level}}\%</ca-katex> chance: <ca-katex>\text{{Yang}}^{{0.88}}</ca-katex> <ca-resource>man</ca-resource>"#,
+                "zh": r#"<ca-katex>\text{{\footnotesize 等级}}\%</ca-katex>几率：<ca-katex>\text{{\footnotesize 阳}}^{{0.88}}</ca-katex><ca-resource>man</ca-resource>"#,
             }
         })
     },
@@ -1724,10 +1796,10 @@ fn init_game_def() {
         let level = game[building_compositor_id]["level"].as_int();
         let cutoff = level as f64 / 100.;
         let yang = game[resource_yang_id];
-        let alpha = 0.8791181557867741;
+        let _alpha = 0.8791181557867741; // \alpha = \frac{{1}}{{\log_2 2.2}} \approx 0.88
 
         if game.rand("compositor") <= cutoff {
-            vec![(resource_man_id, yang.pow(alpha))]
+            vec![(resource_man_id, yang.pow(0.88))]
         } else {
             vec![]
         }
@@ -1882,7 +1954,7 @@ fn init_game_def() {
             },
             "product": {
                 "en": r#"<ca-katex>\frac{{\text{{level}}}}{{\text{{Day}}}} \times \text{{Yin}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource>"#,
-                "zh": r#"<ca-katex>\frac{{\text{{\tiny 等级}}}}{{\text{{\tiny 天数}}}} \times \text{{\footnotesize 阴}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot><ca-resource>water</ca-resource>"#,
+                "zh": r#"<ca-katex display>\frac{{\text{{\footnotesize 等级}}}}{{\text{{\footnotesize 天数}}}} \times \text{{\footnotesize 阴}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot><ca-resource>water</ca-resource>"#,
             }
         })
     },
@@ -1911,7 +1983,133 @@ fn init_game_def() {
     }));
 
 
+    let building_battlefield_id = BuildingId(game_def.buildings.len());
+    add_building(game_def, Building {
+        name: "battlefield",
+        display_name: json!({
+            "en": "Battle Field",
+            "zh": "战场",
+        }),
+        max_level: 65536,
+        detail: json!({
+            "description": {
+                "en": r#"Battle fields convert <ca-resource>man</ca-resource> and <ca-resource>metal</ca-resource> into <ca-resource>earth</ca-resource>."#,
+                "zh": r#"战场将<ca-resource>man</ca-resource>和<ca-resource>metal</ca-resource>转化为<ca-resource>earth</ca-resource>。"#,
+            },
+            "cost": {
+                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 30}}</ca-katex> = <ca-building-detail-slot>cost.man</ca-building-detail-slot> <ca-resource>man</ca-resource><br><ca-katex>2 ^ {{\text{{level}} + 29}}</ca-katex> = <ca-building-detail-slot>cost.metal</ca-building-detail-slot> <ca-resource>metal</ca-resource>"#,
+                "zh": r#"<ca-katex>2 ^ {{\text{{\tiny 等级}} + 30}}</ca-katex> = <ca-building-detail-slot>cost.man</ca-building-detail-slot><ca-resource>man</ca-resource><br><ca-katex>2 ^ {{\text{{\tiny 等级}} + 29}}</ca-katex> = <ca-building-detail-slot>cost.metal</ca-building-detail-slot><ca-resource>metal</ca-resource>"#,
+            },
+            "product": {
+                "en": r#"<ca-katex>2 ^ {{\text{{level}} + 32}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+                "zh": r#"<ca-katex>2 ^ {{\text{{\tiny 等级}}}} + 32}}</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot><ca-resource>earth</ca-resource>"#,
+            }
+        })
+    },
+    // cost
+    Rc::new(move |game| {
+        let level = game[building_battlefield_id]["level"].as_int();
+        vec![
+            (resource_man_id, ExpNum::from(2.).pow(level as f64 + 30.)),
+            (resource_metal_id, ExpNum::from(2.).pow(level as f64 + 29.)),
+        ]
+    }),
+    // product
+    Rc::new(move |game| {
+        let level = game[building_battlefield_id]["level"].as_int();
+        vec![(resource_earth_id, ExpNum::from(2.).pow(level as f64 + 32.))]
+    }),
+    // upgrade cost
+    Rc::new(move |game| {
+        let level = game[building_battlefield_id]["level"].as_int();
+        vec![
+            (resource_man_id, ExpNum::from(2.2).pow(level as f64 + 30.)),
+            (resource_metal_id, ExpNum::from(2.2).pow(level as f64 + 30.)),
+        ]
+    }),
+    // build cost
+    Rc::new(move |_| vec![
+        (resource_man_id, ExpNum::from_exp(24)),
+        (resource_metal_id, ExpNum::from_exp(24)),
+    ]));
 
+    game_def.add_handler("smelter.upgraded", Box::new(move |game, _| {
+        if game[building_battlefield_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+            return;
+        }
+        let smelter_level = game[building_smelter_id]["level"].as_int();
+        if smelter_level >= 10 {
+            game[building_battlefield_id].insert("unlocked".to_string(), SValue::Bool(true));
+            game.post_building_properties(building_battlefield_id);
+        }
+    }));
+
+
+    let building_armilla_id = BuildingId(game_def.buildings.len());
+    add_building(game_def, Building {
+        name: "armilla",
+        display_name: json!({
+            "en": "Armilla",
+            "zh": "浑仪",
+        }),
+        max_level: 256,
+        detail: json!({
+            "description": {
+                "en": r#"Mythic sphere."#,
+                "zh": r#"五种元素在其中流动。"#,
+            },
+            "cost": {
+                "en": r#""#,
+                "zh": r#""#,
+            },
+            "product": {
+                "en": r#"<ca-katex>0.01 \times \text{{level}} \times (\text{{Earth}}^{{0.88}} - \text{{Fire}}^{{0.88}})</ca-katex> = <ca-building-detail-slot>product.metal</ca-building-detail-slot> <ca-resource>metal</ca-resource><br><ca-katex>0.01 \times \text{{level}} \times (\text{{Water}}^{{0.88}} - \text{{Metal}}^{{0.88}})</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot> <ca-resource>wood</ca-resource><br><ca-katex>0.01 \times \text{{level}} \times (\text{{Metal}}^{{0.88}} - \text{{Earth}}^{{0.88}})</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource><br><ca-katex>0.01 \times \text{{level}} \times (\text{{Wood}}^{{0.88}} - \text{{Water}}^{{0.88}})</ca-katex> = <ca-building-detail-slot>product.fire</ca-building-detail-slot> <ca-resource>fire</ca-resource><br><ca-katex>0.01 \times \text{{level}} \times (\text{{Fire}}^{{0.88}} - \text{{Wood}}^{{0.88}})</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot> <ca-resource>earth</ca-resource>"#,
+                "zh": r#"<ca-katex>0.01 \times \text{{\footnotesize 等级}} \times (\text{{\footnotesize 土}}^{{0.88}} - \text{{\footnotesize 火}}^{{0.88}})</ca-katex> = <ca-building-detail-slot>product.metal</ca-building-detail-slot><ca-resource>metal</ca-resource><br><ca-katex>0.01 \times \text{{\footnotesize 等级}} \times (\text{{\footnotesize 水}}^{{0.88}} - \text{{\footnotesize 金}}^{{0.88}})</ca-katex> = <ca-building-detail-slot>product.wood</ca-building-detail-slot><ca-resource>wood</ca-resource><br><ca-katex>0.01 \times \text{{\footnotesize 等级}} \times (\text{{\footnotesize 金}}^{{0.88}} - \text{{\footnotesize 土}}^{{0.88}})</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot><ca-resource>water</ca-resource><br><ca-katex>0.01 \times \text{{\footnotesize 等级}} \times (\text{{\footnotesize 木}}^{{0.88}} - \text{{\footnotesize 水}}^{{0.88}})</ca-katex> = <ca-building-detail-slot>product.fire</ca-building-detail-slot><ca-resource>fire</ca-resource><br><ca-katex>0.01 \times \text{{\footnotesize 等级}} \times (\text{{\footnotesize 火}}^{{0.88}} - \text{{\footnotesize 木}}^{{0.88}})</ca-katex> = <ca-building-detail-slot>product.earth</ca-building-detail-slot><ca-resource>earth</ca-resource>"#,
+            }
+        })
+    },
+    // cost
+    Rc::new(move |_| vec![]),
+    // product
+    Rc::new(move |game| {
+        let level = game[building_armilla_id]["level"].as_int();
+        let metal_pow = game[resource_metal_id].pow(0.88);
+        let wood_pow = game[resource_wood_id].pow(0.88);
+        let water_pow = game[resource_water_id].pow(0.88);
+        let fire_pow = game[resource_fire_id].pow(0.88);
+        let earth_pow = game[resource_earth_id].pow(0.88);
+
+        let coeff = ExpNum::from(0.01) * ExpNum::from(level as f64);
+
+        vec![
+            (resource_metal_id, coeff * earth_pow.saturating_sub(fire_pow)),
+            (resource_wood_id, coeff * water_pow.saturating_sub(metal_pow)),
+            (resource_water_id, coeff * metal_pow.saturating_sub(earth_pow)),
+            (resource_fire_id, coeff * wood_pow.saturating_sub(water_pow)),
+            (resource_earth_id, coeff * fire_pow.saturating_sub(wood_pow)),
+        ]
+    }),
+    // upgrade cost
+    Rc::new(move |game| {
+        let level = game[building_armilla_id]["level"].as_int();
+        vec![
+            (resource_yin_id, ExpNum::from(2.).pow(level + 30)),
+            (resource_yang_id, ExpNum::from(2.).pow(level + 30))
+        ]
+    }),
+    // build cost
+    Rc::new(move |_| vec![
+        (resource_yin_id, ExpNum::from_exp(22)),
+        (resource_yang_id, ExpNum::from_exp(22)),
+    ]));
+
+    game_def.add_handler("blackaltar.built", Box::new(move |game, _| {
+        if game[building_armilla_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+            return;
+        }
+        game[building_armilla_id].insert("unlocked".to_string(), SValue::Bool(true));
+        game.post_building_properties(building_armilla_id);
+    }));
 
 
 
