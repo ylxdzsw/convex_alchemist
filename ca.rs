@@ -816,9 +816,10 @@ fn init_game_def() {
         });
 
         game_def.add_handler(format!("{name}.devforge"), {
-            let _forge_effect_fun = forge_effect_fun.clone();
+            let forge_effect_fun = forge_effect_fun.clone();
 
             Box::new(move |game, _| {
+                forge_effect_fun(game);
                 game[id].insert("forged".to_string(), SValue::Bool(true));
                 game.post_relic_properties(id);
             })
@@ -906,7 +907,7 @@ fn init_game_def() {
     Rc::new(move |game| game[resource_metal_id] >= ExpNum::from_exp(20.)),
     // forge_effect_fun
     Rc::new(move |game| {
-        game[resource_metal_id] -= ExpNum::from_exp(20.);
+        // no need to pay the cost; the user can always warp one day back to reclaim the expense while keeping the relic.
         game.post_message_to_front("building.details", JsonNull) // ask front end to update building details
     }),
     // activate_condition_fun
@@ -968,7 +969,7 @@ fn init_game_def() {
     // forge_condition_fun
     Rc::new(move |game| game[resource_man_id] >= ExpNum::from_exp(20.)),
     // forge_effect_fun
-    Rc::new(move |game| game[resource_man_id] -= ExpNum::from_exp(20.)),
+    Rc::new(move |_game| {}),
     // activate_condition_fun
     Rc::new(move |_game| true),
     // activate_effect_fun
@@ -1712,8 +1713,8 @@ fn init_game_def() {
                 "zh": r#""#,
             },
             "product": {
-                "en": r#"<ca-katex>\text{{level}}\%</ca-katex> chance: <ca-katex>\text{{Yang}}^\alpha</ca-katex> <ca-resource>man</ca-resource><br><ca-katex>\alpha = \frac{{1}}{{\log_2 2.2}} \approx 0.88</ca-katex>"#,
-                "zh": r#"<ca-katex>\text{{\footnotesize 等级}}\%</ca-katex>几率：<ca-katex>\text{{\footnotesize 阳}}^\alpha</ca-katex> <ca-resource>man</ca-resource><br><ca-katex>\alpha = \frac{{1}}{{\log_2 2.2}} \approx 0.88</ca-katex>"#,
+                "en": r#"<ca-katex>\text{{level}}\%</ca-katex> chance: <ca-katex>\text{{Yang}}^{{0.88}}</ca-katex> <ca-resource>man</ca-resource>"#,
+                "zh": r#"<ca-katex>\text{{\footnotesize 等级}}\%</ca-katex>几率：<ca-katex>\text{{\footnotesize 阳}}^{{0.88}}</ca-katex><ca-resource>man</ca-resource>"#,
             }
         })
     },
@@ -1724,10 +1725,10 @@ fn init_game_def() {
         let level = game[building_compositor_id]["level"].as_int();
         let cutoff = level as f64 / 100.;
         let yang = game[resource_yang_id];
-        let alpha = 0.8791181557867741;
+        let _alpha = 0.8791181557867741; // \alpha = \frac{{1}}{{\log_2 2.2}} \approx 0.88
 
         if game.rand("compositor") <= cutoff {
-            vec![(resource_man_id, yang.pow(alpha))]
+            vec![(resource_man_id, yang.pow(0.88))]
         } else {
             vec![]
         }
