@@ -1839,7 +1839,7 @@ fn init_game_def() {
             "en": "Compost Bin",
             "zh": "堆肥箱",
         }),
-        max_level: 65535,
+        max_level: 65536,
         detail: json!({
             "description": {
                 "en": r#"A compost bin."#,
@@ -1892,7 +1892,7 @@ fn init_game_def() {
             "en": "Volcano",
             "zh": "火山",
         }),
-        max_level: 65535,
+        max_level: 65536,
         detail: json!({
             "description": {
                 "en": r#"Active volcano."#,
