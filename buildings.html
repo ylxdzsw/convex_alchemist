@@ -126,6 +126,7 @@
                 this.shadowRoot.querySelector('.header .name').dataset[lang] = display_name
 
             game.on(`incomes`, this.income_callback = all_incomes => {
+                // TODO: this has a performance problem. It takes >50% of the step time.
                 this.shadowRoot.querySelector('.header .income').innerHTML = Object.entries(all_incomes)
                     .filter(([_, incomes]) => incomes[this.name])
                     .map(([resource, incomes]) => `${incomes[this.name]} <ca-resource>${resource}</ca-resource>`)
