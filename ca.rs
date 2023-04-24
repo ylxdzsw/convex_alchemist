@@ -335,12 +335,12 @@ impl SignedExpNum {
         Self { sign: ExpNumSign::Negative, magnitude: ExpNum::zero() }
     }
 
-    fn format_with_preference(&self, preference: &[impl Borrow<str>], output_type: &str) -> String {
+    fn format_with_preference(&self, format_preference: &[impl Borrow<str>], color_preference: &[impl Borrow<str>], output_type: &str) -> String {
         assert_eq!(output_type, "html");
 
         match self.sign {
-            ExpNumSign::Positive => format!("+{}", self.magnitude.format_with_preference(preference, output_type)),
-            ExpNumSign::Negative => format!("-{}", self.magnitude.format_with_preference(preference, output_type)),
+            ExpNumSign::Positive => format!(r#"<span style="color: {}">+{}</span>"#, color_preference[0].borrow(), self.magnitude.format_with_preference(format_preference, output_type)),
+            ExpNumSign::Negative => format!(r#"<span style="color: {}">-{}</span>"#, color_preference[1].borrow(), self.magnitude.format_with_preference(format_preference, output_type)),
         }
     }
 }
@@ -720,6 +720,11 @@ fn init_game_def() {
 
     game_def.add_handler("income_preference", Box::new(move |game, income_preference| {
         game.income_preference = income_preference.as_u64().unwrap() as _;
+        game.post_incomes();
+    }));
+
+    game_def.add_handler("color_preference", Box::new(move |game, color_preference| {
+        game.color_preference = color_preference.as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
         game.post_incomes();
     }));
 
@@ -1959,8 +1964,8 @@ fn init_game_def() {
                 "zh": r#""#,
             },
             "product": {
-                "en": r#"<ca-katex>\frac{{\text{{level}}}}{{\text{{Day}}}} \times \text{{Yin}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource>"#,
-                "zh": r#"<ca-katex display>\frac{{\text{{\footnotesize 等级}}}}{{\text{{\footnotesize 天数}}}} \times \text{{\footnotesize 阴}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot><ca-resource>water</ca-resource>"#,
+                "en": r#"<ca-katex>\frac{{20 \times \text{{level}}}}{{1 + \text{{Day}}}} \times \text{{Yin}}^{{0.88}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot> <ca-resource>water</ca-resource>"#,
+                "zh": r#"<ca-katex display>\frac{{20 \times \text{{\footnotesize 等级}}}}{{\text{{1 + \footnotesize 天数}}}} \times \text{{\footnotesize 阴}}^{{0.88}}</ca-katex> = <ca-building-detail-slot>product.water</ca-building-detail-slot><ca-resource>water</ca-resource>"#,
             }
         })
     },
@@ -1970,7 +1975,7 @@ fn init_game_def() {
     Rc::new(move |game| {
         let level = game[building_blackaltar_id]["level"].as_int();
         let yin = game[resource_yin_id];
-        vec![(resource_water_id, yin * ExpNum::from(level as f64) / ExpNum::from(game.day as f64))]
+        vec![(resource_water_id, ExpNum::from(20.) * yin.pow(0.88) * ExpNum::from(level as f64) / ExpNum::from(game.day as f64 + 1.))]
     }),
     // upgrade cost
     Rc::new(move |game| {
@@ -2137,6 +2142,7 @@ struct Game {
 
     format_preference: Vec<String>,
     income_preference: u8, // 1 or 10
+    color_preference: Vec<String>,
 }
 
 impl Game {
@@ -2154,7 +2160,8 @@ impl Game {
             ).collect(),
 
             format_preference: ["e", "d", "d", "e", "e", "ee"].into_iter().map(|s| s.to_string()).collect(),
-            income_preference: 1
+            income_preference: 1,
+            color_preference: ["inherit", "inherit"].into_iter().map(|s| s.to_string()).collect() // positive, negative
         }
     }
 
@@ -2311,6 +2318,7 @@ impl Game {
 
             "format_preference": self.format_preference.clone(),
             "income_preference": self.income_preference,
+            "color_preference": self.color_preference.clone(),
         })
     }
 
@@ -2344,8 +2352,17 @@ impl Game {
             }
         }
 
-        self.format_preference = state["format_preference"].as_array().unwrap().iter().map(|x| x.as_str().unwrap().to_string()).collect();
-        self.income_preference = state["income_preference"].as_u64().unwrap() as _;
+        if let Some(format_preference) = state.get("format_preference").and_then(|x| x.as_array()) {
+            self.format_preference = format_preference.iter().map(|x| x.as_str().unwrap().to_string()).collect();
+        }
+
+        if let Some(income_preference) = state.get("income_preference").and_then(|x| x.as_u64()) {
+            self.income_preference = income_preference as _;
+        }
+
+        if let Some(color_preference) = state.get("color_preference").and_then(|x| x.as_array()) {
+            self.color_preference = color_preference.iter().map(|x| x.as_str().unwrap().to_string()).collect();
+        }
     }
 
     fn push_history(&mut self, event: impl ToString, arg: JsonValue) {
@@ -2372,11 +2389,11 @@ impl Game {
                 };
                 if !income.magnitude.is_zero() {
                     *accumulated.get_or_insert(SignedExpNum::positive_zero()) += income;
-                    resource_incomes.insert(building.name.to_string(), income.format_with_preference(&self.format_preference, "html"));
+                    resource_incomes.insert(building.name.to_string(), income.format_with_preference(&self.format_preference, &self.color_preference, "html"));
                 }
             }
             if let Some(accumulated) = accumulated {
-                resource_incomes.insert("accumulated".into(), accumulated.format_with_preference(&self.format_preference, "html"));
+                resource_incomes.insert("accumulated".into(), accumulated.format_with_preference(&self.format_preference, &self.color_preference, "html"));
             }
             all_incomes.insert(resource.name.to_string(), resource_incomes);
         }
