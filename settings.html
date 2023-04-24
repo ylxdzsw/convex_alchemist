@@ -22,6 +22,13 @@
 <button id="settings-income-10"><ca-text data-en="10 Days Average" data-zh="十日平均"></ca-text></button>
 </div>
 
+<div style="margin-top: .4rem">
+    <ca-text data-en="Resource Changing Color: " data-zh="资源变化颜色："></ca-text>
+    <button id="settings-color-black"><ca-text data-en="Black" data-zh="黑色"></ca-text></button>
+    <button id="settings-color-green-up-red-down"><ca-text data-en="Green Up Red Down" data-zh="绿涨红跌"></ca-text></button>
+    <button id="settings-color-red-up-green-down"><ca-text data-en="Red Up Green Down" data-zh="红涨绿跌"></ca-text></button>
+</div>
+
 </ca-card>
 
 <style>
@@ -69,6 +76,18 @@
 
     document.querySelector("#settings-income-10").addEventListener('click', e => {
         game.poll_with_message("income_preference", 10)
+    })
+
+    document.querySelector("#settings-color-black").addEventListener('click', e => {
+        game.poll_with_message("color_preference", ["inherit", "inherit"])
+    })
+
+    document.querySelector("#settings-color-green-up-red-down").addEventListener('click', e => {
+        game.poll_with_message("color_preference", ["#0ecb81", "#f6465d"])
+    })
+
+    document.querySelector("#settings-color-red-up-green-down").addEventListener('click', e => {
+        game.poll_with_message("color_preference", ["#f6465d", "#0ecb81"])
     })
 
     game.on('load.fail', document.querySelector("#settings-remove").fail_callback = () => {
