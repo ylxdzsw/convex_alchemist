@@ -66,6 +66,8 @@
         if (speed < 1) speed = 1
         if (speed > 10) speed = 10
 
+        document.querySelector('#status-speed-control-speed').value = speed
+
         return 1000 / speed
     }
 
