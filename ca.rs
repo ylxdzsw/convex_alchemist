@@ -1920,11 +1920,11 @@ fn init_game_def() {
         }
 
         if game.rand("volcano.fire") <= 1. / 100. {
-            products.push((resource_metal_id, ExpNum::from(2.).pow(level + 25)));
+            products.push((resource_fire_id, ExpNum::from(2.).pow(level + 25)));
         }
 
         if game.rand("volcano.earth") <= 5. / 100. {
-            products.push((resource_metal_id, ExpNum::from(2.).pow(level + 25)));
+            products.push((resource_earth_id, ExpNum::from(2.).pow(level + 25)));
         }
 
         products
