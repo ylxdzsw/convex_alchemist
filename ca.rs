@@ -71,7 +71,13 @@ impl ExpNum {
                 } else {
                     format!("{:.1}", significand_f64)
                 };
-                format!("{}{a}{a}", significand_str, a = (b'a' - 1 + scale as u8) as char)
+                let unit = (b'a' - 1 + scale as u8) as char;
+                match output_type {
+                    "tex" => format!("<ca-katex>{}{a}{a}</ca-katex>", significand_str, a = unit),
+                    "html" => format!("{}&hairsp;{a}{a}", significand_str, a = unit),
+                    "plain" => format!("{}{a}{a}", significand_str, a = unit),
+                    _ => panic!(),
+                }
             }
             "10" => {
                 let scale = (self.as_exp() / LN_10 + 1e-9).floor();
