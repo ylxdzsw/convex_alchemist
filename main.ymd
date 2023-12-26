@@ -2,19 +2,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="author" content="ca@ylxdzsw.com">
+<meta name="license" content="MIT">
 <meta name="github" content="https://github.com/ylxdzsw/convex_alchemist">
 
 <title>Convex Alchemist</title>
 
-<script>
-window.wasm_ready = (async () => {
-const buffer = Uint8Array.from(atob("[wasm]"), c => c.charCodeAt(0))
-const x = await WebAssembly.instantiate(buffer, {})
-window.ca = x.instance.exports
-})()
-</script>
-
-[wasm]= read("target/wasm32-unknown-unknown/release/ca.wasm", 'base64')
+[require](target/wasm32-unknown-unknown/release/ca.wasm)
 
 [#] Chrome only load font if it appear BOTH inside and outside the shadow dom, even when inlined as data url
 [require].style-katex(lib/katex.css)
@@ -43,7 +36,7 @@ window.ca = x.instance.exports
 </div>
 
 <div id="bottom-notice">
-Copyright © 2023: ca@ylxdzsw.com <br>
+Copyright © 2023-2024: ca@ylxdzsw.com <br>
 <a href="https://github.com/ylxdzsw/convex_alchemist">Source code available under the MIT license</a>
 </div>
 
