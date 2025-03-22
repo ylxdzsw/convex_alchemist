@@ -3,7 +3,6 @@
 #![feature(vec_into_raw_parts)]
 #![feature(generic_arg_infer)]
 #![feature(const_trait_impl)]
-#![feature(const_mut_refs)]
 
 use std::{collections::BTreeMap, fmt::Debug, ops::{Index, IndexMut}, rc::Rc, f64::consts::LN_10, borrow::Borrow, str::FromStr};
 use serde_json::{json, Value as JsonValue, Value::Null as JsonNull};
@@ -51,17 +50,17 @@ impl ExpNum {
         if self.is_zero() {
             return String::from("0");
         }
-    
+
         match format {
             "a" => {
                 if self < &ExpNum::from(1.) || self > &ExpNum::from_exp(f64::ln(1000.0) * 27.0 - 1e-9) {
                     panic!("out of range: num={}, format={}", self, format);
                 }
-    
+
                 if self < &ExpNum::from(1000.) {
                     return format!("{:.2}", f64::from(*self));
                 }
-    
+
                 let scale = (self.as_exp() / f64::ln(1000.0) + 1e-9).floor();
                 let significand_f64 = f64::from(*self / ExpNum::from(1000.).pow(ExpNum::from(scale)));
                 let significand_str = if significand_f64 < 10.0 {
@@ -113,7 +112,7 @@ impl ExpNum {
                 if self < &ExpNum::from_exp(1e-9) {
                     panic!("out of range: num={}, format={}", self, format);
                 }
-    
+
                 match output_type {
                     "tex" => format!("<ca-katex>e^{{e^{{{:.3}}}}}</ca-katex>", self.as_exp()),
                     "html" => format!("ℯ<sup>ℯ<sup>{:.3}</sup></sup>", self.as_exp()),
@@ -130,7 +129,7 @@ impl ExpNum {
         while i < NUMBER_FORMAT_CUTOFF.len() && self > &NUMBER_FORMAT_CUTOFF[i] {
             i += 1;
         }
-        return self.format(preference[i].borrow(), output_type);
+        self.format(preference[i].borrow(), output_type)
     }
 
     fn saturating_sub(self, rhs: Self) -> Self {
@@ -179,7 +178,7 @@ impl std::ops::Add for ExpNum {
     }
 }
 
-    
+
 impl std::ops::Sub for ExpNum {
     type Output = Self;
 
@@ -281,7 +280,7 @@ mod test_expnum {
         let a = ExpNum::from_exp(f64::NEG_INFINITY);
         let b = ExpNum::from(1.);
         assert!(f64::from((b + a) - b) < 1e-9);
-        
+
         let a = ExpNum::from_exp(800);
         let b = ExpNum::from(1.);
         assert!(f64::from((b + a) - a) < 1e-9);
@@ -696,7 +695,7 @@ fn init_game_def() {
                 "name": r.name,
                 "display_name": r.display_name,
             })).collect::<Vec<_>>(),
-    
+
             "building_defs": game_def!().buildings.iter().map(|b| json!({
                 "name": b.name,
                 "display_name": b.display_name,
@@ -823,7 +822,7 @@ fn init_game_def() {
             let forge_effect_fun = forge_effect_fun.clone();
 
             Box::new(move |game, _| {
-                if !game[id].get("unlocked").map_or(false, |x| x.as_bool()) || game[id].get("forged").map_or(false, |x| x.as_bool()) {
+                if !game[id].get("unlocked").is_some_and(|x| x.as_bool()) || game[id].get("forged").is_some_and(|x| x.as_bool()) {
                     return
                 }
 
@@ -857,7 +856,7 @@ fn init_game_def() {
             let cooldown_fun = cooldown_fun.clone();
 
             Box::new(move |game, _| {
-                if !game[id].get("forged").map_or(false, |x| x.as_bool()) || passive {
+                if !game[id].get("forged").is_some_and(|x| x.as_bool()) || passive {
                     return
                 }
 
@@ -951,7 +950,7 @@ fn init_game_def() {
     let wrap_cost_fun_with_relic_coupon = |cost_fun: Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>>| -> Rc<dyn Fn(&Game) -> Vec<(ResourceId, ExpNum)>> {
         Rc::new(move |game| {
             let mut costs = cost_fun(game);
-            if game[relic_coupon_id].get("forged").map_or(false, |x| x.as_bool()) && game.day <= 6570 {
+            if game[relic_coupon_id].get("forged").is_some_and(|x| x.as_bool()) && game.day <= 6570 {
                 for (_, cost) in costs.iter_mut() {
                     *cost /= ExpNum::from(2.);
                 }
@@ -1022,7 +1021,7 @@ fn init_game_def() {
     })));
 
     game_def.add_handler("smelter.built", Box::new(move |game, _| {
-        if game[relic_pstone_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[relic_pstone_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         game[relic_pstone_id].insert("unlocked".to_string(), SValue::Bool(true));
@@ -1085,7 +1084,7 @@ fn init_game_def() {
     })));
 
     game_def.add_handler("armilla.built", Box::new(move |game, _| {
-        if game[relic_taichi_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[relic_taichi_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         game[relic_taichi_id].insert("unlocked".to_string(), SValue::Bool(true));
@@ -1116,7 +1115,7 @@ fn init_game_def() {
             let product_fun = product_fun.clone();
 
             Box::new(move |game, _| {
-                if !game[id].get("enabled").map_or(false, |x| x.as_bool()) {
+                if !game[id].get("enabled").is_some_and(|x| x.as_bool()) {
                     return;
                 }
 
@@ -1152,7 +1151,7 @@ fn init_game_def() {
             let build_cost_fun = build_cost_fun.clone();
 
             Box::new(move |game, _| {
-                if !game[id].get("unlocked").map_or(false, |x| x.as_bool()) {
+                if !game[id].get("unlocked").is_some_and(|x| x.as_bool()) {
                     return;
                 }
 
@@ -1181,7 +1180,7 @@ fn init_game_def() {
         });
 
         game_def.add_handler(format!("{name}.enable"), Box::new(move |game, _| {
-            if !game[id].get("built").map_or(false, |x| x.as_bool()) {
+            if !game[id].get("built").is_some_and(|x| x.as_bool()) {
                 return;
             }
 
@@ -1190,7 +1189,7 @@ fn init_game_def() {
         }));
 
         game_def.add_handler(format!("{name}.disable"), Box::new(move |game, _| {
-            if !game[id].get("built").map_or(false, |x| x.as_bool()) {
+            if !game[id].get("built").is_some_and(|x| x.as_bool()) {
                 return;
             }
 
@@ -1202,7 +1201,7 @@ fn init_game_def() {
             let upgrade_cost_fun = upgrade_cost_fun.clone();
 
             Box::new(move |game, _| {
-                if !game[id].get("built").map_or(false, |x| x.as_bool()) {
+                if !game[id].get("built").is_some_and(|x| x.as_bool()) {
                     return
                 }
 
@@ -1244,7 +1243,7 @@ fn init_game_def() {
         }));
 
         game_def.add_handler(format!("{name}.downgrade"), Box::new(move |game, _| {
-            if !game[id].get("built").map_or(false, |x| x.as_bool()) {
+            if !game[id].get("built").is_some_and(|x| x.as_bool()) {
                 return;
             }
 
@@ -1265,7 +1264,7 @@ fn init_game_def() {
 
             Box::new(move |game, _| {
                 // getting details use some information that is may not always available
-                if !game[id].get("unlocked").map_or(false, |x| x.as_bool()) {
+                if !game[id].get("unlocked").is_some_and(|x| x.as_bool()) {
                     return;
                 }
 
@@ -1276,7 +1275,7 @@ fn init_game_def() {
                     "upgrade_cost": {}
                 });
 
-                if game[id].get("built").map_or(false, |x| x.as_bool()) {
+                if game[id].get("built").is_some_and(|x| x.as_bool()) {
                     for (resource_id, amount) in cost_fun(game) {
                         let name = game_def!(resource_id).name;
                         let sufficient = game[resource_id] >= amount;
@@ -1414,7 +1413,7 @@ fn init_game_def() {
     Rc::new(move |_| vec![]));
 
     game_def.add_handler("tent.upgraded", Box::new(move |game, _| {
-        if game[building_forest_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_forest_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         let tent_level = game[building_tent_id]["level"].as_int();
@@ -1458,7 +1457,7 @@ fn init_game_def() {
         let level = game[building_swamp_id]["level"].as_int();
         let water = game[resource_water_id];
         let earth = game[resource_earth_id];
-        
+
         let coeff = ExpNum::from(2.).pow(level + 8);
 
         let water_production = coeff * (water + ExpNum::from(1.)) / (water + earth + ExpNum::from(1.));
@@ -1480,7 +1479,7 @@ fn init_game_def() {
     Rc::new(move |_| vec![]));
 
     game_def.add_handler("tent.upgraded", Box::new(move |game, _| {
-        if game[building_swamp_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_swamp_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         let tent_level = game[building_tent_id]["level"].as_int();
@@ -1536,7 +1535,7 @@ fn init_game_def() {
     Rc::new(move |_| vec![(resource_man_id, ExpNum::from(10000.))]));
 
     game_def.add_handler("tent.upgraded", Box::new(move |game, _| {
-        if game[building_campfire_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_campfire_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         let tent_level = game[building_tent_id]["level"].as_int();
@@ -1590,7 +1589,7 @@ fn init_game_def() {
     Rc::new(move |_| vec![(resource_man_id, ExpNum::from(10000.))]));
 
     game_def.add_handler("tent.upgraded", Box::new(move |game, _| {
-        if game[building_mine_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_mine_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         let tent_level = game[building_tent_id]["level"].as_int();
@@ -1650,7 +1649,7 @@ fn init_game_def() {
     ]));
 
     game_def.add_handler("tent.upgraded", Box::new(move |game, _| {
-        if game[building_farm_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_farm_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         let tent_level = game[building_tent_id]["level"].as_int();
@@ -1707,7 +1706,7 @@ fn init_game_def() {
     Rc::new(move |_| vec![(resource_metal_id, ExpNum::from(2.).pow(16))]));
 
     game_def.add_handler("mine.upgraded", Box::new(move |game, _| {
-        if game[building_nuke_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_nuke_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         let mine_level = game[building_mine_id]["level"].as_int();
@@ -1769,7 +1768,7 @@ fn init_game_def() {
     ]));
 
     game_def.add_handler("campfire.built", Box::new(move |game, _| {
-        if game[building_smelter_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_smelter_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         game[building_smelter_id].insert("unlocked".to_string(), SValue::Bool(true));
@@ -1824,7 +1823,7 @@ fn init_game_def() {
     Rc::new(move |_| vec![(resource_yang_id, ExpNum::from_exp(15))]));
 
     game_def.add_handler("nuke.built", Box::new(move |game, _| {
-        if game[building_compositor_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_compositor_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         game[building_compositor_id].insert("unlocked".to_string(), SValue::Bool(true));
@@ -1877,7 +1876,7 @@ fn init_game_def() {
     Rc::new(move |_| vec![(resource_wood_id, ExpNum::from_exp(18))]));
 
     game_def.add_handler("compositor.built", Box::new(move |game, _| {
-        if game[building_compost_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_compost_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         game[building_compost_id].insert("unlocked".to_string(), SValue::Bool(true));
@@ -1938,7 +1937,7 @@ fn init_game_def() {
     Rc::new(move |_| vec![(resource_yang_id, ExpNum::from_exp(18))]));
 
     game_def.add_handler("nuke.built", Box::new(move |game, _| {
-        if game[building_volcano_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_volcano_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         game[building_volcano_id].insert("unlocked".to_string(), SValue::Bool(true));
@@ -1986,7 +1985,7 @@ fn init_game_def() {
     Rc::new(move |_| vec![(resource_yin_id, ExpNum::from_exp(20))]));
 
     game_def.add_handler("compost.built", Box::new(move |game, _| {
-        if game[building_blackaltar_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_blackaltar_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         game[building_blackaltar_id].insert("unlocked".to_string(), SValue::Bool(true));
@@ -2045,7 +2044,7 @@ fn init_game_def() {
     ]));
 
     game_def.add_handler("smelter.upgraded", Box::new(move |game, _| {
-        if game[building_battlefield_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_battlefield_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         let smelter_level = game[building_smelter_id]["level"].as_int();
@@ -2115,7 +2114,7 @@ fn init_game_def() {
     ]));
 
     game_def.add_handler("blackaltar.built", Box::new(move |game, _| {
-        if game[building_armilla_id].get("unlocked").map_or(false, |x| x.as_bool()) {
+        if game[building_armilla_id].get("unlocked").is_some_and(|x| x.as_bool()) {
             return;
         }
         game[building_armilla_id].insert("unlocked".to_string(), SValue::Bool(true));
@@ -2167,7 +2166,7 @@ impl Game {
 
     fn rand(&self, salt: &str) -> f64 {
         // TODO: pre-compute the salt if needed
-        let bytes: [u8; 4] = unsafe { std::mem::transmute(self.day) };
+        let bytes: [u8; 4] = self.day.to_le_bytes();
         let mut state = 0x811c9dc5_u32;
         for b in bytes.into_iter() {
             state = state.wrapping_mul(0x01000193);
@@ -2185,7 +2184,7 @@ impl Game {
         for h in handler {
             h(self, arg);
         }
-    
+
         Some(())
     }
 
@@ -2296,7 +2295,7 @@ impl Game {
 
     // serialize the game state for checkpointing
     fn dump_state(&self) -> JsonValue {
-        return json!({
+        json!({
             "resources": self.resources.iter().enumerate().map(|(i, r)| {
                 (game_def!(ResourceId(i)).name.to_string(), r.as_exp())
             }).collect::<BTreeMap<String, f64>>(),
@@ -2402,11 +2401,11 @@ impl Game {
 
     // states that persist across time warppings
     fn dump_persistent_state(&mut self) -> JsonValue {
-        return json!({
+        json!({
             "forged_relics": self.relics.iter().enumerate()
-                .filter(|(_, r)| r.get("forged").map_or(false, |x| x.as_bool()))
+                .filter(|(_, r)| r.get("forged").is_some_and(|x| x.as_bool()))
                 .map(|(i, _)| game_def!(RelicId(i)).name).collect::<Vec<_>>(),
-        });
+        })
     }
 
     fn load_persistent_state(&mut self, state: &JsonValue) {
@@ -2474,24 +2473,23 @@ unsafe fn write_json_buffer(value: &JsonValue) {
 unsafe fn read_json_buffer() -> serde_json::Result<JsonValue> {
     let [ptr, len, capacity] = JSON_BUFFER;
     let buffer = Vec::from_raw_parts(ptr as *mut u8, len as _, capacity as _);
-    let json = serde_json::from_slice(&buffer);
-    json
+    serde_json::from_slice(&buffer)
 }
 
 #[no_mangle]
-unsafe extern fn alloc_json_buffer(byte_length: u32) {
+unsafe extern "C" fn alloc_json_buffer(byte_length: u32) {
     let (ptr, len, capacity) = Vec::<u8>::with_capacity(byte_length as _).into_raw_parts();
     JSON_BUFFER = [ptr as _, len as _, capacity as _];
 }
 
 #[no_mangle]
-unsafe extern fn free_json_buffer() {
+unsafe extern "C" fn free_json_buffer() {
     let (ptr, len, capacity) = (JSON_BUFFER[0] as *mut u8, JSON_BUFFER[1] as _, JSON_BUFFER[2] as _);
     let _ = Vec::from_raw_parts(ptr, len, capacity);
 }
 
 #[no_mangle]
-unsafe extern fn game_new() -> *mut Game {
+unsafe extern "C" fn game_new() -> *mut Game {
     if !GAME_DEF.is_initialized() {
         init_game_def()
     }
@@ -2500,7 +2498,7 @@ unsafe extern fn game_new() -> *mut Game {
 }
 
 #[no_mangle]
-unsafe extern fn game_dump(game: *mut Game) {
+unsafe extern "C" fn game_dump(game: *mut Game) {
     let game = &mut *game;
     game.push_history("dummy", JsonNull); // record the last day
     write_json_buffer(&json!(game.history));
@@ -2508,7 +2506,7 @@ unsafe extern fn game_dump(game: *mut Game) {
 }
 
 #[no_mangle]
-unsafe extern fn game_load(game: *mut Game) {
+unsafe extern "C" fn game_load(game: *mut Game) {
     let game = &mut *game;
     assert!(game.history.is_empty());
     if let Ok(mut history) = read_json_buffer() {
@@ -2521,7 +2519,7 @@ unsafe extern fn game_load(game: *mut Game) {
 }
 
 #[no_mangle]
-unsafe extern fn game_timewarp(game: *mut Game, day: u32) {
+unsafe extern "C" fn game_timewarp(game: *mut Game, day: u32) {
     let game = &mut *game;
     let persistent_state = game.dump_persistent_state();
     game.push_history("dummy", JsonNull);
@@ -2533,12 +2531,12 @@ unsafe extern fn game_timewarp(game: *mut Game, day: u32) {
 }
 
 #[no_mangle]
-unsafe extern fn game_free(game: *mut Game) {
+unsafe extern "C" fn game_free(game: *mut Game) {
     let _ = Box::from_raw(game);
 }
 
 #[no_mangle]
-unsafe extern fn poll(game: *mut Game) {
+unsafe extern "C" fn poll(game: *mut Game) {
     let game = &mut *game;
 
     if let Ok([event, arg]) = read_json_buffer().as_ref().map(|x| &x.as_array().unwrap()[..]) {
@@ -2547,7 +2545,7 @@ unsafe extern fn poll(game: *mut Game) {
             game.push_history(event, arg.clone());
         }
 
-        game.dispatch_message(event, &arg);
+        game.dispatch_message(event, arg);
         game.post_status();
         game.post_resources();
         game.post_incomes();
